@@ -28,7 +28,7 @@ export function Home() {
   const { t } = useTranslation()
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
-  const { content, isLoaded, isUrl } = useHomePageContent()
+  const { content, isLoaded, isUrl, isHtml } = useHomePageContent()
 
   if (!isLoaded) {
     return (
@@ -49,6 +49,13 @@ export function Home() {
               src={content}
               className='h-screen w-full border-none'
               title={t('Custom Home Page')}
+            />
+          ) : isHtml ? (
+            <iframe
+              srcDoc={content}
+              className='h-screen w-full border-none'
+              title={t('Custom Home Page')}
+              sandbox='allow-scripts allow-same-origin'
             />
           ) : (
             <div className='container mx-auto py-8'>

@@ -83,5 +83,10 @@ export function useHomePageContent(): HomePageContentResult {
     // not a URL
   }
 
-  return { content, isLoaded, isUrl }
+  const isHtml =
+    !isUrl &&
+    (/^\s*<!DOCTYPE\s+html/i.test(content.trim()) ||
+      /^\s*<html[\s>]/i.test(content.trim()))
+
+  return { content, isLoaded, isUrl, isHtml }
 }
