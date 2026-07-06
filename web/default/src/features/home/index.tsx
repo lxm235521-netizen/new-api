@@ -49,13 +49,14 @@ export function Home() {
               src={content}
               className='h-screen w-full border-none'
               title={t('Custom Home Page')}
+              sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
             />
           ) : isHtml ? (
             <iframe
               srcDoc={content}
               className='h-screen w-full border-none'
               title={t('Custom Home Page')}
-              sandbox='allow-scripts allow-same-origin'
+              sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
             />
           ) : (
             <div className='container mx-auto py-8'>

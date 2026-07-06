@@ -35,13 +35,14 @@ export function Plugins() {
             src={content}
             className='h-screen w-full border-none'
             title={t('Plugin Download')}
+            sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
           />
         ) : isHtml ? (
           <iframe
             srcDoc={content}
             className='h-screen w-full border-none'
             title={t('Plugin Download')}
-            sandbox='allow-scripts allow-same-origin'
+            sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
           />
         ) : (
           <div className='container mx-auto py-8'>
