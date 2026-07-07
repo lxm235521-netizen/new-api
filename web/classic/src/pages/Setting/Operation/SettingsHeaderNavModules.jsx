@@ -48,6 +48,7 @@ export default function SettingsHeaderNavModules(props) {
     },
     docs: true,
     about: true,
+    plugins: true,
   });
 
   // 处理顶栏模块配置变更
@@ -88,6 +89,7 @@ export default function SettingsHeaderNavModules(props) {
       },
       docs: true,
       about: true,
+      plugins: true,
     };
     setHeaderNavModules(defaultModules);
     showSuccess(t('已重置为默认配置'));
@@ -142,6 +144,11 @@ export default function SettingsHeaderNavModules(props) {
           };
         }
 
+        // 处理向后兼容性：如果旧配置没有plugins，默认开启
+        if (modules.plugins === undefined) {
+          modules.plugins = true;
+        }
+
         setHeaderNavModules(modules);
       } catch (error) {
         // 使用默认配置
@@ -154,6 +161,7 @@ export default function SettingsHeaderNavModules(props) {
           },
           docs: true,
           about: true,
+          plugins: true,
         };
         setHeaderNavModules(defaultModules);
       }
@@ -187,6 +195,11 @@ export default function SettingsHeaderNavModules(props) {
       key: 'about',
       title: t('关于'),
       description: t('关于系统的详细信息'),
+    },
+    {
+      key: 'plugins',
+      title: t('插件下载'),
+      description: t('插件下载页面'),
     },
   ];
 

@@ -69,6 +69,11 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
           };
         }
 
+        // 处理向后兼容性：如果旧配置没有plugins，默认开启
+        if (modules.plugins === undefined) {
+          modules.plugins = true;
+        }
+
         return modules;
       } catch (error) {
         console.error('解析顶栏模块配置失败:', error);
