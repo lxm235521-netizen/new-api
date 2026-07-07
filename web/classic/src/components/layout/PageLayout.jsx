@@ -50,7 +50,9 @@ const PageLayout = () => {
   const { i18n } = useTranslation();
   const location = useLocation();
 
-  const cardProPages = [
+  const hideFooterPages = [
+    '/',
+    '/plugins',
     '/console/channel',
     '/console/log',
     '/console/redemption',
@@ -62,7 +64,7 @@ const PageLayout = () => {
     '/pricing',
   ];
 
-  const shouldHideFooter = cardProPages.includes(location.pathname);
+  const shouldHideFooter = hideFooterPages.includes(location.pathname);
 
   const shouldInnerPadding =
     location.pathname.includes('/console') &&

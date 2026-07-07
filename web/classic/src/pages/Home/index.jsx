@@ -87,14 +87,19 @@ const Home = () => {
     const { success, message, data } = res.data;
     if (success) {
       let content = data;
-      if (!data.startsWith('https://')) {
+      const isUrl = data.startsWith('https://');
+      const isHtml =
+        !isUrl &&
+        (/^\s*<!DOCTYPE\s+html/i.test(data.trim()) ||
+          /^\s*<html[\s>]/i.test(data.trim()));
+      if (!isUrl && !isHtml) {
         content = marked.parse(data);
       }
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
 
       // 如果内容是 URL，则发送主题模式
-      if (data.startsWith('https://')) {
+      if (isUrl) {
         const iframe = document.querySelector('iframe');
         if (iframe) {
           iframe.onload = () => {
@@ -335,11 +340,20 @@ const Home = () => {
           </div>
         </div>
       ) : (
-        <div className='classic-page-fill overflow-x-hidden w-full'>
+        <div className='classic-page-fill flex flex-col overflow-x-hidden w-full'>
           {homePageContent.startsWith('https://') ? (
             <iframe
               src={homePageContent}
-              className='w-full h-full border-none'
+              className='w-full flex-1 min-h-0 border-none'
+              sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
+            />
+          ) : /^\s*<!DOCTYPE\s+html/i.test(homePageContent.trim()) ||
+            /^\s*<html[\s>]/i.test(homePageContent.trim()) ? (
+            <iframe
+              srcDoc={homePageContent}
+              className='w-full flex-1 min-h-0 border-none'
+              title={t('Custom Home Page')}
+              sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
             />
           ) : (
             <div
