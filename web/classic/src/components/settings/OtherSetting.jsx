@@ -48,6 +48,7 @@ const OtherSetting = () => {
     Footer: '',
     About: '',
     HomePageContent: '',
+    PluginPageContent: '',
   });
   let [loading, setLoading] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -79,6 +80,7 @@ const OtherSetting = () => {
     SystemName: false,
     Logo: false,
     HomePageContent: false,
+    PluginPageContent: false,
     About: false,
     Footer: false,
     CheckUpdate: false,
@@ -183,22 +185,26 @@ const OtherSetting = () => {
       setLoadingInput((loadingInput) => ({ ...loadingInput, Logo: false }));
     }
   };
-  // 个性化设置 - 首页内容
+  // 个性化设置 - 首页/插件下载内容
   const submitOption = async (key) => {
+    const successMessages = {
+      HomePageContent: t('首页内容已更新'),
+      PluginPageContent: t('插件下载内容已更新'),
+    };
     try {
       setLoadingInput((loadingInput) => ({
         ...loadingInput,
-        HomePageContent: true,
+        [key]: true,
       }));
       await updateOption(key, inputs[key]);
-      showSuccess('首页内容已更新');
+      showSuccess(successMessages[key] || t('内容已更新'));
     } catch (error) {
-      console.error('首页内容更新失败', error);
-      showError('首页内容更新失败');
+      console.error(error);
+      showError(t('内容更新失败'));
     } finally {
       setLoadingInput((loadingInput) => ({
         ...loadingInput,
-        HomePageContent: false,
+        [key]: false,
       }));
     }
   };
@@ -505,6 +511,22 @@ const OtherSetting = () => {
                 loading={loadingInput['HomePageContent']}
               >
                 {t('设置首页内容')}
+              </Button>
+              <Form.TextArea
+                label={t('插件下载内容')}
+                placeholder={t(
+                  '在此输入插件下载内容，支持 Markdown & HTML 代码。如果输入的是一个链接，则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为插件下载页',
+                )}
+                field={'PluginPageContent'}
+                onChange={handleInputChange}
+                style={{ fontFamily: 'JetBrains Mono, Consolas' }}
+                autosize={{ minRows: 6, maxRows: 12 }}
+              />
+              <Button
+                onClick={() => submitOption('PluginPageContent')}
+                loading={loadingInput['PluginPageContent']}
+              >
+                {t('设置插件下载内容')}
               </Button>
               <Form.TextArea
                 label={t('关于')}
