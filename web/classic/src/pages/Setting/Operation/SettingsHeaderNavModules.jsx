@@ -49,6 +49,7 @@ export default function SettingsHeaderNavModules(props) {
     docs: true,
     about: true,
     plugins: true,
+    onlineUse: true,
   });
 
   // 处理顶栏模块配置变更
@@ -90,6 +91,7 @@ export default function SettingsHeaderNavModules(props) {
       docs: true,
       about: true,
       plugins: true,
+      onlineUse: true,
     };
     setHeaderNavModules(defaultModules);
     showSuccess(t('已重置为默认配置'));
@@ -149,6 +151,11 @@ export default function SettingsHeaderNavModules(props) {
           modules.plugins = true;
         }
 
+        // 处理向后兼容性：如果旧配置没有onlineUse，默认开启
+        if (modules.onlineUse === undefined) {
+          modules.onlineUse = true;
+        }
+
         setHeaderNavModules(modules);
       } catch (error) {
         // 使用默认配置
@@ -162,6 +169,7 @@ export default function SettingsHeaderNavModules(props) {
           docs: true,
           about: true,
           plugins: true,
+          onlineUse: true,
         };
         setHeaderNavModules(defaultModules);
       }
@@ -200,6 +208,11 @@ export default function SettingsHeaderNavModules(props) {
       key: 'plugins',
       title: t('插件下载'),
       description: t('插件下载页面'),
+    },
+    {
+      key: 'onlineUse',
+      title: t('在线使用'),
+      description: t('在线使用页面'),
     },
   ];
 

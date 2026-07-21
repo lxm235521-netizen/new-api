@@ -65,6 +65,7 @@ export type SiteSettings = {
   About: string
   HomePageContent: string
   PluginPageContent: string
+  OnlineUsePageContent: string
   ServerAddress: string
   'legal.user_agreement': string
   'legal.privacy_policy': string

@@ -53,6 +53,7 @@ const PageLayout = () => {
   const hideFooterPages = [
     '/',
     '/plugins',
+    '/online-use',
     '/console/channel',
     '/console/log',
     '/console/redemption',

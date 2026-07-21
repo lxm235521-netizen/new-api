@@ -62,6 +62,7 @@ const _systemInfoSchema = z.object({
   About: z.string().optional(),
   HomePageContent: z.string().optional(),
   PluginPageContent: z.string().optional(),
+  OnlineUsePageContent: z.string().optional(),
   legal: z.object({
     user_agreement: z.string().optional(),
     privacy_policy: z.string().optional(),
@@ -95,6 +96,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     About: normalizeValue(defaultValues.About),
     HomePageContent: normalizeValue(defaultValues.HomePageContent),
     PluginPageContent: normalizeValue(defaultValues.PluginPageContent),
+    OnlineUsePageContent: normalizeValue(defaultValues.OnlineUsePageContent),
     legal: {
       user_agreement: normalizeValue(defaultValues.legal?.user_agreement),
       privacy_policy: normalizeValue(defaultValues.legal?.privacy_policy),
@@ -349,6 +351,31 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                       <FormDescription>
                         {t(
                           'Content displayed on the plugin download page (supports Markdown, HTML, or URL)'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SettingsFormGridItem>
+
+              <SettingsFormGridItem span='full'>
+                <FormField
+                  control={form.control}
+                  name='OnlineUsePageContent'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Online Use Page Content')}</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder={t('Paste HTML code or enter a URL...')}
+                          rows={6}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Content displayed on the online use page (supports Markdown, HTML, or URL)'
                         )}
                       </FormDescription>
                       <FormMessage />

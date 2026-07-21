@@ -55,6 +55,8 @@ const headerNavSchema = z.object({
   rankingsRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
+  plugins: z.boolean(),
+  onlineUse: z.boolean(),
 })
 
 type HeaderNavFormValues = z.infer<typeof headerNavSchema>
@@ -93,6 +95,14 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.about === undefined
       ? HEADER_NAV_DEFAULT.about
       : Boolean(config.about),
+  plugins:
+    config.plugins === undefined
+      ? HEADER_NAV_DEFAULT.plugins
+      : Boolean(config.plugins),
+  onlineUse:
+    config.onlineUse === undefined
+      ? HEADER_NAV_DEFAULT.onlineUse
+      : Boolean(config.onlineUse),
 })
 
 export function HeaderNavigationSection({
@@ -119,6 +129,8 @@ export function HeaderNavigationSection({
       console: values.console,
       docs: values.docs,
       about: values.about,
+      plugins: values.plugins,
+      onlineUse: values.onlineUse,
       pricing: {
         ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
         enabled: values.pricingEnabled,
@@ -170,6 +182,16 @@ export function HeaderNavigationSection({
       key: 'about',
       title: t('About'),
       description: t('Static page describing the platform.'),
+    },
+    {
+      key: 'plugins',
+      title: t('Plugins'),
+      description: t('Plugin download page.'),
+    },
+    {
+      key: 'onlineUse',
+      title: t('Online Use'),
+      description: t('Online use page.'),
     },
   ]
 

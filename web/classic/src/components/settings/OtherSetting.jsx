@@ -529,6 +529,22 @@ const OtherSetting = () => {
                 {t('设置插件下载内容')}
               </Button>
               <Form.TextArea
+                label={t('在线使用内容')}
+                placeholder={t(
+                  '在此输入在线使用内容，支持 Markdown & HTML 代码。如果输入的是一个链接，则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为在线使用页',
+                )}
+                field={'OnlineUsePageContent'}
+                onChange={handleInputChange}
+                style={{ fontFamily: 'JetBrains Mono, Consolas' }}
+                autosize={{ minRows: 6, maxRows: 12 }}
+              />
+              <Button
+                onClick={() => submitOption('OnlineUsePageContent')}
+                loading={loadingInput['OnlineUsePageContent']}
+              >
+                {t('设置在线使用内容')}
+              </Button>
+              <Form.TextArea
                 label={t('关于')}
                 placeholder={t(
                   '在此输入新的关于内容，支持 Markdown & HTML 代码。如果输入的是一个链接，则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为关于页面',

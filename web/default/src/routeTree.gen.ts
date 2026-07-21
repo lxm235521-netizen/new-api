@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UserAgreementRouteImport } from './routes/user-agreement'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as PluginsRouteImport } from './routes/plugins'
+import { Route as OnlineUseRouteImport } from './routes/online-use'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -83,6 +84,11 @@ const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
 const PluginsRoute = PluginsRouteImport.update({
   id: '/plugins',
   path: '/plugins',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnlineUseRoute = OnlineUseRouteImport.update({
+  id: '/online-use',
+  path: '/online-use',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -400,6 +406,7 @@ const AuthenticatedSystemSettingsAuthSectionRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/online-use': typeof OnlineUseRoute
   '/plugins': typeof PluginsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
@@ -460,6 +467,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/online-use': typeof OnlineUseRoute
   '/plugins': typeof PluginsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
@@ -522,6 +530,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/(auth)': typeof authRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/online-use': typeof OnlineUseRoute
   '/plugins': typeof PluginsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
@@ -584,6 +593,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/online-use'
     | '/plugins'
     | '/privacy-policy'
     | '/user-agreement'
@@ -644,6 +654,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/online-use'
     | '/plugins'
     | '/privacy-policy'
     | '/user-agreement'
@@ -705,6 +716,7 @@ export interface FileRouteTypes {
     | '/'
     | '/(auth)'
     | '/_authenticated'
+    | '/online-use'
     | '/plugins'
     | '/privacy-policy'
     | '/user-agreement'
@@ -768,6 +780,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   authRouteRoute: typeof authRouteRouteWithChildren
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  OnlineUseRoute: typeof OnlineUseRoute
   PluginsRoute: typeof PluginsRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   UserAgreementRoute: typeof UserAgreementRoute
@@ -800,6 +813,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy-policy'
       fullPath: '/privacy-policy'
       preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/online-use': {
+      id: '/online-use'
+      path: '/online-use'
+      fullPath: '/online-use'
+      preLoaderRoute: typeof OnlineUseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plugins': {
@@ -1345,6 +1365,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   authRouteRoute: authRouteRouteWithChildren,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  OnlineUseRoute: OnlineUseRoute,
   PluginsRoute: PluginsRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   UserAgreementRoute: UserAgreementRoute,

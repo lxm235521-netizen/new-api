@@ -74,6 +74,11 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
           modules.plugins = true;
         }
 
+        // 处理向后兼容性：如果旧配置没有onlineUse，默认开启
+        if (modules.onlineUse === undefined) {
+          modules.onlineUse = true;
+        }
+
         return modules;
       } catch (error) {
         console.error('解析顶栏模块配置失败:', error);

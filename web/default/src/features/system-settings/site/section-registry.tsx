@@ -45,6 +45,7 @@ const SITE_SECTIONS = [
           About: settings.About,
           HomePageContent: settings.HomePageContent,
           PluginPageContent: settings.PluginPageContent,
+          OnlineUsePageContent: settings.OnlineUsePageContent,
           ServerAddress: settings.ServerAddress,
           legal: {
             user_agreement: settings['legal.user_agreement'],

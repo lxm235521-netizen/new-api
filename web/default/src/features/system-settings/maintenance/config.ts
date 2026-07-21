@@ -28,6 +28,8 @@ export type HeaderNavModulesConfig = {
   rankings: HeaderNavAccessConfig
   docs: boolean
   about: boolean
+  plugins: boolean
+  onlineUse: boolean
   [key: string]: boolean | HeaderNavAccessConfig
 }
 
@@ -51,6 +53,8 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   },
   docs: true,
   about: true,
+  plugins: true,
+  onlineUse: true,
 }
 
 export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {

@@ -99,6 +99,11 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Plugins'), href: '/plugins' })
   }
 
+  // Online Use
+  if (modules?.onlineUse !== false) {
+    links.push({ title: t('Online Use'), href: '/online-use' })
+  }
+
   // About
   if (modules?.about !== false) {
     links.push({ title: t('About'), href: '/about' })
