@@ -116,7 +116,8 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     About: z.string().optional(),
     HomePageContent: z.string().optional(),
   PluginPageContent: z.string().optional(),
-    legal: z.object({
+  OnlineUsePageContent: z.string().optional(),
+  legal: z.object({
       user_agreement: z.string().optional(),
       privacy_policy: z.string().optional(),
     }),
