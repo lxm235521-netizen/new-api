@@ -302,6 +302,7 @@
     "一次调用消耗多少刀，优先级大于模型倍率": "How much USD one call costs, priority over model ratio",
     "一行一个，不区分大小写": "One line per keyword, not case-sensitive",
     "一行一个屏蔽词，不需要符号分割": "One line per sensitive word, no symbols are required",
+    "一行一个模型名称": "One model name per line",
     "一键填充到 FluentRead": "One-click fill to FluentRead",
     "三种操作的区别：": "Differences between the three operations:",
     "上一个表单块": "Previous form block",
@@ -2117,6 +2118,7 @@
     "模型删除失败: {{error}}": "Failed to delete model: {{error}}",
     "模型删除成功": "Model deleted successfully",
     "模型名称": "Model Name",
+    "模型列表": "Models",
     "模型名称已存在": "Model name already exists",
     "模型固定价格": "Model price per call",
     "模型图标": "Model icon",
@@ -3354,6 +3356,7 @@
     "运行时长（小时）": "Runtime Duration (hours)",
     "返回修改": "Go back and edit",
     "返回登录": "Return to Login",
+    "返回字段过滤设置": "Response Field Filtering",
     "返回错误": "",
     "这个界面默认按价格填写，保存时会自动换算回后端需要的倍率 JSON。": "This editor uses prices by default and converts them back into the ratio JSON required by the backend when saved.",
     "这些价格都是可选项，不填也可以。": "All of these prices are optional and can be left empty.",
@@ -3827,6 +3830,7 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "video_url 和 download_url 字段将在所列模型的任务响应中被隐藏，不影响视频播放。": "The video_url and download_url fields will be hidden in task responses for the listed models. This does not affect video playback."
   }
 }
