@@ -327,6 +327,7 @@ export type SecuritySettings = {
   'fetch_setting.ip_list': string[]
   'fetch_setting.allowed_ports': number[]
   'fetch_setting.apply_ip_filter_for_domain': boolean
+  'video_filter_setting.hidden_fields_models': string[]
 }
 
 export type UpstreamChannel = {

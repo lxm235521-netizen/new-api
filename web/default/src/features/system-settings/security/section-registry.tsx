@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { RateLimitSection } from '../request-limits/rate-limit-section'
 import { SensitiveWordsSection } from '../request-limits/sensitive-words-section'
 import { SSRFSection } from '../request-limits/ssrf-section'
+import { VideoFilterSection } from '../request-limits/video-filter-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -73,6 +74,18 @@ const SECURITY_SECTIONS = [
             settings['fetch_setting.allowed_ports'],
           'fetch_setting.apply_ip_filter_for_domain':
             settings['fetch_setting.apply_ip_filter_for_domain'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'video-filter',
+    titleKey: 'Response Field Filtering',
+    build: (settings: SecuritySettings) => (
+      <VideoFilterSection
+        defaultValues={{
+          'video_filter_setting.hidden_fields_models':
+            settings['video_filter_setting.hidden_fields_models'],
         }}
       />
     ),

@@ -19,6 +19,7 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -539,6 +540,10 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 }
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
+	data := task.Data
+	if system_setting.ShouldStripTaskData(task.Properties.OriginModelName) {
+		data = common.StripTaskSensitiveKeys(data)
+	}
 	return &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
@@ -559,6 +564,6 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Progress:   task.Progress,
 		Properties: task.Properties,
 		Username:   task.Username,
-		Data:       task.Data,
+		Data:       data,
 	}
 }

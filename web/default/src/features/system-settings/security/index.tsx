@@ -41,6 +41,7 @@ const defaultSecuritySettings: SecuritySettings = {
   'fetch_setting.ip_list': [],
   'fetch_setting.allowed_ports': [],
   'fetch_setting.apply_ip_filter_for_domain': false,
+  'video_filter_setting.hidden_fields_models': [],
 }
 
 export function SecuritySettings() {
