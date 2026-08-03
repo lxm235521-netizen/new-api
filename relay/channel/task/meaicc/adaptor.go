@@ -212,7 +212,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		Progress: formatProgress(resTask.Progress),
 	}
 
-	switch normalizeStatus(resTask.Status) {
+	switch meaiccStatusKind(resTask.Status) {
 	case "queued", "pending", "created", "submitted":
 		taskResult.Status = model.TaskStatusQueued
 		if taskResult.Progress == "" {
@@ -230,7 +230,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "failed", "failure", "cancelled", "canceled":
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = taskcommon.ProgressComplete
-		taskResult.Reason = "task failed"
+		taskResult.Reason = meaiccFailureReason(resTask)
 		if resTask.Error != nil && strings.TrimSpace(resTask.Error.Message) != "" {
 			taskResult.Reason = resTask.Error.Message
 		}
@@ -399,7 +399,7 @@ func isNativeRequest(req requestPayload) bool {
 }
 
 func meaiccStatusToVideoStatus(status string) string {
-	switch normalizeStatus(status) {
+	switch meaiccStatusKind(status) {
 	case "queued", "pending", "created", "submitted":
 		return dto.VideoStatusQueued
 	case "running", "processing", "in_progress":
@@ -415,6 +415,33 @@ func meaiccStatusToVideoStatus(status string) string {
 
 func normalizeStatus(status string) string {
 	return strings.ToLower(strings.TrimSpace(status))
+}
+
+func meaiccStatusKind(status string) string {
+	normalized := normalizeStatus(status)
+	if strings.HasPrefix(normalized, "failed") {
+		return "failed"
+	}
+	if strings.HasPrefix(normalized, "running") {
+		return "running"
+	}
+	if strings.HasPrefix(normalized, "succeeded") {
+		return "succeeded"
+	}
+	return normalized
+}
+
+func meaiccFailureReason(resTask responsePayload) string {
+	status := strings.TrimSpace(resTask.Status)
+	if status == "" {
+		return "task failed"
+	}
+	if idx := strings.Index(status, ":"); idx >= 0 && idx+1 < len(status) {
+		if reason := strings.TrimSpace(status[idx+1:]); reason != "" {
+			return reason
+		}
+	}
+	return status
 }
 
 func formatProgress(progress int) string {

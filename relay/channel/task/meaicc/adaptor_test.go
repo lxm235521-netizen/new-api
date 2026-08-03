@@ -54,6 +54,12 @@ func TestParseTaskResultMapsMeaiccStatuses(t *testing.T) {
 	require.Equal(t, model.TaskStatusSuccess, model.TaskStatus(succeeded.Status))
 	require.Equal(t, "100%", succeeded.Progress)
 	require.Equal(t, "https://cdn.example.com/out.mp4", succeeded.Url)
+
+	failed, err := adaptor.ParseTaskResult([]byte(`{"id":"task_1","object":"","status":"FAILED: poll status=451 code=reference_image_privacy_error message=The reference image contains a real person's face and cannot be used to generate content.","seconds":0,"created_at":1785769304}`))
+	require.NoError(t, err)
+	require.Equal(t, model.TaskStatusFailure, model.TaskStatus(failed.Status))
+	require.Equal(t, "100%", failed.Progress)
+	require.Equal(t, "poll status=451 code=reference_image_privacy_error message=The reference image contains a real person's face and cannot be used to generate content.", failed.Reason)
 }
 
 func TestConvertToOpenAIVideoUsesTaskResultURL(t *testing.T) {
@@ -79,4 +85,3 @@ func TestConvertToOpenAIVideoUsesTaskResultURL(t *testing.T) {
 	metadata := payload["metadata"].(map[string]interface{})
 	require.Equal(t, "https://cdn.example.com/out.mp4", metadata["url"])
 }
-
