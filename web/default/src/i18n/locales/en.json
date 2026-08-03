@@ -2294,6 +2294,7 @@
     "Maximum tokens per response": "Maximum tokens per response",
     "maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647": "maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647",
     "May be used for training by upstream provider": "May be used for training by upstream provider",
+    "MeaiccVideo": "MeaiccVideo",
     "Media pricing": "Media pricing",
     "Median time-to-first-token (TTFT) sampled hourly per group": "Median time-to-first-token (TTFT) sampled hourly per group",
     "Medical Q&A, mental health support": "Medical Q&A, mental health support",

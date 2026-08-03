@@ -2284,6 +2284,7 @@
     "Maximum tokens per response": "Nombre maximal de jetons par réponse",
     "maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647": "maxRequests ≥ 0, maxSuccess ≥ 1, les deux ≤ 2 147 483 647",
     "May be used for training by upstream provider": "Peut être utilisé pour l'entraînement par le fournisseur amont",
+    "MeaiccVideo": "MeaiccVideo",
     "Media pricing": "Tarification multimédia",
     "Median time-to-first-token (TTFT) sampled hourly per group": "Latence médiane jusqu'au premier jeton (TTFT) échantillonnée par heure et par groupe",
     "Medical Q&A, mental health support": "Q&R médicales, soutien en santé mentale",

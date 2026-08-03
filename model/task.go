@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 )
 
 type TaskStatus string
@@ -514,6 +515,10 @@ func (t *Task) ToOpenAIVideo() *dto.OpenAIVideo {
 	openAIVideo.SetProgressStr(t.Progress)
 	openAIVideo.CreatedAt = t.CreatedAt
 	openAIVideo.CompletedAt = t.UpdatedAt
-	openAIVideo.SetMetadata("url", t.GetResultURL())
+	if t.Status == TaskStatusSuccess {
+		openAIVideo.SetMetadata("url", system_setting.BuildVideoProxyURL(t.TaskID))
+	} else {
+		openAIVideo.SetMetadata("url", t.GetResultURL())
+	}
 	return openAIVideo
 }

@@ -2294,6 +2294,7 @@
     "Maximum tokens per response": "单次响应最大 token 数",
     "maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647": "maxRequests ≥ 0, maxSuccess ≥ 1，两者均 ≤ 2,147,483,647",
     "May be used for training by upstream provider": "可能被上游提供商用于训练",
+    "MeaiccVideo": "MeaiccVideo",
     "Media pricing": "媒体定价",
     "Median time-to-first-token (TTFT) sampled hourly per group": "按小时采样的各分组首 token 延迟（TTFT）中位数",
     "Medical Q&A, mental health support": "医疗问答与心理健康支持",

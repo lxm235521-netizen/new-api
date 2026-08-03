@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -158,6 +160,66 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
+	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+	streamBody := io.Reader(resp.Body)
+	bufferedBody := bufio.NewReader(resp.Body)
+	isJSON := strings.Contains(contentType, "application/json") || strings.Contains(contentType, "+json")
+	if !isJSON {
+		if prefix, peekErr := bufferedBody.Peek(512); peekErr == nil || len(prefix) > 0 {
+			trimmed := bytes.TrimSpace(prefix)
+			isJSON = len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
+		}
+		streamBody = bufferedBody
+	}
+	if isJSON {
+		jsonBody, readErr := io.ReadAll(bufferedBody)
+		if readErr != nil {
+			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to read JSON response for task %s: %s", taskID, readErr.Error()))
+			videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to fetch video content")
+			return
+		}
+		if mediaURL := extractVideoURLFromJSON(jsonBody); mediaURL != "" {
+			resp.Body.Close()
+			originalHost := req.URL.Host
+			videoURL = mediaURL
+			if err := common.ValidateURLWithFetchSetting(videoURL, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Video URL blocked for task %s: %v", taskID, err))
+				videoProxyError(c, http.StatusForbidden, "server_error", fmt.Sprintf("request blocked: %v", err))
+				return
+			}
+			req.URL, err = url.Parse(videoURL)
+			if err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to parse media URL %s: %s", videoURL, err.Error()))
+				videoProxyError(c, http.StatusInternalServerError, "server_error", "Failed to create proxy request")
+				return
+			}
+			mediaReq := req.Clone(ctx)
+			if mediaURLParsed, parseMediaErr := url.Parse(videoURL); parseMediaErr == nil && mediaURLParsed.Host != originalHost {
+				mediaReq.Header.Del("Authorization")
+				mediaReq.Header.Del("x-goog-api-key")
+			}
+			resp, err = client.Do(mediaReq)
+			if err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to fetch video from %s: %s", videoURL, err.Error()))
+				videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to fetch video content")
+				return
+			}
+			defer resp.Body.Close()
+			streamBody = resp.Body
+			if resp.StatusCode != http.StatusOK {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned status %d for %s", resp.StatusCode, videoURL))
+				videoProxyError(c, http.StatusBadGateway, "server_error",
+					fmt.Sprintf("Upstream service returned status %d", resp.StatusCode))
+				return
+			}
+		}
+		if mediaURL := extractVideoURLFromJSON(jsonBody); mediaURL == "" {
+			logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned JSON without a video URL for task %s", taskID))
+			videoProxyError(c, http.StatusBadGateway, "server_error", "Upstream did not return video content")
+			return
+		}
+	}
+
 	for key, values := range resp.Header {
 		for _, value := range values {
 			c.Writer.Header().Add(key, value)
@@ -166,7 +228,7 @@ func VideoProxy(c *gin.Context) {
 
 	c.Writer.Header().Set("Cache-Control", "public, max-age=86400")
 	c.Writer.WriteHeader(resp.StatusCode)
-	if _, err = io.Copy(c.Writer, resp.Body); err != nil {
+	if _, err = io.Copy(c.Writer, streamBody); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
 	}
 }
@@ -202,4 +264,77 @@ func writeVideoDataURL(c *gin.Context, dataURL string) error {
 	c.Writer.WriteHeader(http.StatusOK)
 	_, err = c.Writer.Write(videoBytes)
 	return err
+}
+
+func extractVideoURLFromJSON(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var payload map[string]any
+	if err := common.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	return extractVideoURLFromMap(payload)
+}
+
+func extractVideoURLFromMap(payload map[string]any) string {
+	if payload == nil {
+		return ""
+	}
+	if url := extractStringField(payload, "url"); url != "" {
+		return url
+	}
+	if url := extractStringField(payload, "download_url"); url != "" {
+		return url
+	}
+	if url := extractStringField(payload, "video_url"); url != "" {
+		return url
+	}
+	if video, ok := payload["video"].(map[string]any); ok {
+		if url := extractVideoURLFromMap(video); url != "" {
+			return url
+		}
+	}
+	if videos, ok := payload["videos"].([]any); ok {
+		for _, item := range videos {
+			if vm, ok := item.(map[string]any); ok {
+				if url := extractVideoURLFromMap(vm); url != "" {
+					return url
+				}
+			}
+		}
+	}
+	if metadata, ok := payload["metadata"].(map[string]any); ok {
+		if url := extractVideoURLFromMap(metadata); url != "" {
+			return url
+		}
+	}
+	if output, ok := payload["output"].(map[string]any); ok {
+		if url := extractVideoURLFromMap(output); url != "" {
+			return url
+		}
+	}
+	if result, ok := payload["result"].(map[string]any); ok {
+		if url := extractVideoURLFromMap(result); url != "" {
+			return url
+		}
+	}
+	return ""
+}
+
+func extractStringField(payload map[string]any, key string) string {
+	if payload == nil {
+		return ""
+	}
+	if raw, ok := payload[key]; ok {
+		switch v := raw.(type) {
+		case string:
+			return strings.TrimSpace(v)
+		case map[string]any:
+			if nested := extractStringField(v, "url"); nested != "" {
+				return nested
+			}
+		}
+	}
+	return ""
 }

@@ -398,6 +398,9 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 				taskResp = service.TaskErrorWrapper(err, "convert_to_openai_video_failed", http.StatusInternalServerError)
 				return
 			}
+			if originTask.Status == model.TaskStatusSuccess {
+				openAIVideoData = common.ReplaceTaskVideoURLs(openAIVideoData, system_setting.BuildVideoProxyURL(originTask.TaskID))
+			}
 			respBody = openAIVideoData
 			return
 		}
@@ -493,6 +496,9 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"task_id":  task.TaskID,
 		"url":      task.GetResultURL(),
 	}
+	if task.Status == model.TaskStatusSuccess {
+		out["url"] = system_setting.BuildVideoProxyURL(task.TaskID)
+	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
 		Data: out,
@@ -541,8 +547,16 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 	data := task.Data
+	resultURL := task.GetResultURL()
 	if system_setting.ShouldStripTaskData(task.Properties.OriginModelName) {
 		data = common.StripTaskSensitiveKeys(data)
+	}
+	if task.Status == model.TaskStatusSuccess {
+		proxyURL := system_setting.BuildVideoProxyURL(task.TaskID)
+		data = common.ReplaceTaskVideoURLs(data, proxyURL)
+		if proxyURL != "" {
+			resultURL = proxyURL
+		}
 	}
 	return &dto.TaskDto{
 		ID:         task.ID,
@@ -557,7 +571,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Action:     task.Action,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
-		ResultURL:  task.GetResultURL(),
+		ResultURL:  resultURL,
 		SubmitTime: task.SubmitTime,
 		StartTime:  task.StartTime,
 		FinishTime: task.FinishTime,

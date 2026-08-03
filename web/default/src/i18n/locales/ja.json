@@ -2284,6 +2284,7 @@
     "Maximum tokens per response": "1 回の応答あたりの最大トークン数",
     "maxRequests ≥ 0, maxSuccess ≥ 1, both ≤ 2,147,483,647": "maxRequests ≥ 0、maxSuccess ≥ 1、両方とも ≤ 2,147,483,647",
     "May be used for training by upstream provider": "上流プロバイダーが学習に利用する可能性があります",
+    "MeaiccVideo": "MeaiccVideo",
     "Media pricing": "メディア料金",
     "Median time-to-first-token (TTFT) sampled hourly per group": "グループ別に毎時サンプリングした最初のトークンまでの中央値レイテンシ (TTFT)",
     "Medical Q&A, mental health support": "医療Q&A・メンタルヘルスサポート",
