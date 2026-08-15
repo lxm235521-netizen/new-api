@@ -36,6 +36,7 @@ import { StatusContext } from '../../context/Status';
 
 import RechargeCard from './RechargeCard';
 import InvitationCard from './InvitationCard';
+import ExternalRechargeCard from './ExternalRechargeCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
@@ -1027,6 +1028,11 @@ const TopUp = () => {
           complianceConfirmed={topupInfo.payment_compliance_confirmed !== false}
         />
       </div>
+      {isSafeHttpCheckoutUrl(topUpLink) && (
+        <div className='mt-6'>
+          <ExternalRechargeCard t={t} topUpLink={topUpLink} />
+        </div>
+      )}
     </div>
   );
 };
