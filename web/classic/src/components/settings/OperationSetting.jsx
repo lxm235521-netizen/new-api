@@ -24,6 +24,7 @@ import SettingsHeaderNavModules from '../../pages/Setting/Operation/SettingsHead
 import SettingsSidebarModulesAdmin from '../../pages/Setting/Operation/SettingsSidebarModulesAdmin';
 import SettingsSensitiveWords from '../../pages/Setting/Operation/SettingsSensitiveWords';
 import SettingsVideoFilter from '../../pages/Setting/Operation/SettingsVideoFilter';
+import SettingsTaskPerCallBilling from '../../pages/Setting/Operation/SettingsTaskPerCallBilling';
 import SettingsLog from '../../pages/Setting/Operation/SettingsLog';
 import SettingsMonitoring from '../../pages/Setting/Operation/SettingsMonitoring';
 import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLimit';
@@ -64,6 +65,9 @@ const OperationSetting = () => {
 
     /* 返回字段过滤设置 */
     'video_filter_setting.hidden_fields_models': '',
+
+    /* 任务按次计费设置 */
+    'task_per_call_billing_setting.model_names': '[]',
 
     /* 日志设置 */
     LogConsumeEnabled: false,
@@ -145,6 +149,10 @@ const OperationSetting = () => {
         {/* 返回字段过滤设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsVideoFilter options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 任务按次计费设置 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsTaskPerCallBilling options={inputs} refresh={onRefresh} />
         </Card>
         {/* 日志设置 */}
         <Card style={{ marginTop: '10px' }}>

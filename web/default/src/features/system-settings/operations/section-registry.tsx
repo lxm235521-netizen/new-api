@@ -25,6 +25,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { TaskPerCallBillingSection } from './task-per-call-billing-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -134,6 +135,15 @@ const OPERATIONS_SECTIONS = [
           'perf_metrics_setting.retention_days':
             settings['perf_metrics_setting.retention_days'] ?? 0,
         }}
+      />
+    ),
+  },
+  {
+    id: 'task-billing',
+    titleKey: 'Task Per-Call Billing',
+    build: (settings: OperationsSettings) => (
+      <TaskPerCallBillingSection
+        defaultValue={settings['task_per_call_billing_setting.model_names']}
       />
     ),
   },

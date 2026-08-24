@@ -74,6 +74,25 @@ const TaskLogsFilters = ({
             size='small'
           />
 
+          {/* 任务状态 */}
+          <Form.Select
+            field='status'
+            placeholder={t('任务状态')}
+            optionList={[
+              { label: t('全部状态'), value: '' },
+              { label: t('未启动'), value: 'NOT_START' },
+              { label: t('已提交'), value: 'SUBMITTED' },
+              { label: t('排队中'), value: 'QUEUED' },
+              { label: t('执行中'), value: 'IN_PROGRESS' },
+              { label: t('失败'), value: 'FAILURE' },
+              { label: t('成功'), value: 'SUCCESS' },
+              { label: t('未知'), value: 'UNKNOWN' },
+            ]}
+            showClear
+            pure
+            size='small'
+          />
+
           {/* 渠道 ID - 仅管理员可见 */}
           {isAdminUser && (
             <Form.Input
