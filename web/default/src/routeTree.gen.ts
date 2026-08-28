@@ -815,18 +815,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/online-use': {
-      id: '/online-use'
-      path: '/online-use'
-      fullPath: '/online-use'
-      preLoaderRoute: typeof OnlineUseRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/plugins': {
       id: '/plugins'
       path: '/plugins'
       fullPath: '/plugins'
       preLoaderRoute: typeof PluginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/online-use': {
+      id: '/online-use'
+      path: '/online-use'
+      fullPath: '/online-use'
+      preLoaderRoute: typeof OnlineUseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {

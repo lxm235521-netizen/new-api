@@ -120,6 +120,14 @@ const LogsFilters = ({
                 pure
                 size='small'
               />
+              <Form.Input
+                field='inviter_id'
+                prefix={<IconSearch />}
+                placeholder={t('邀请人ID')}
+                showClear
+                pure
+                size='small'
+              />
             </>
           )}
         </div>
