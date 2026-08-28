@@ -29,10 +29,12 @@ const LogsActions = ({
   showStat,
   compactMode,
   setCompactMode,
+  logType,
   t,
 }) => {
   const showSkeleton = useMinimumLoadingTime(loadingStat);
   const needSkeleton = !showStat || showSkeleton;
+  const isTopupLog = Number(logType) === 1;
 
   const placeholder = (
     <Space>
@@ -47,7 +49,7 @@ const LogsActions = ({
       <Skeleton loading={needSkeleton} active placeholder={placeholder}>
         <Space>
           <Tag
-            color='blue'
+            color={isTopupLog ? 'green' : 'blue'}
             style={{
               fontWeight: 500,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
@@ -55,31 +57,38 @@ const LogsActions = ({
             }}
             className='!rounded-lg'
           >
-            {t('消耗额度')}: {renderQuota(stat.quota)}
+            {isTopupLog ? t('实际支付金额') : t('消耗额度')}:{' '}
+            {isTopupLog
+              ? Number(stat.topup_money || 0).toFixed(2)
+              : renderQuota(stat.quota)}
           </Tag>
-          <Tag
-            color='pink'
-            style={{
-              fontWeight: 500,
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-              padding: 13,
-            }}
-            className='!rounded-lg'
-          >
-            RPM: {stat.rpm}
-          </Tag>
-          <Tag
-            color='white'
-            style={{
-              border: 'none',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-              fontWeight: 500,
-              padding: 13,
-            }}
-            className='!rounded-lg'
-          >
-            TPM: {stat.tpm}
-          </Tag>
+          {!isTopupLog && (
+            <Tag
+              color='pink'
+              style={{
+                fontWeight: 500,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                padding: 13,
+              }}
+              className='!rounded-lg'
+            >
+              RPM: {stat.rpm}
+            </Tag>
+          )}
+          {!isTopupLog && (
+            <Tag
+              color='white'
+              style={{
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                fontWeight: 500,
+                padding: 13,
+              }}
+              className='!rounded-lg'
+            >
+              TPM: {stat.tpm}
+            </Tag>
+          )}
         </Space>
       </Skeleton>
 

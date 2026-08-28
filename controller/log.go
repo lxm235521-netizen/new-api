@@ -106,6 +106,24 @@ func GetLogsStat(c *gin.Context) {
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
 	inviterId, _ := strconv.Atoi(c.Query("inviter_id"))
+	if logType == model.LogTypeTopup {
+		money, err := model.SumTopUpMoney(startTimestamp, endTimestamp, username, inviterId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data": gin.H{
+				"quota":       0,
+				"rpm":         0,
+				"tpm":         0,
+				"topup_money": money,
+			},
+		})
+		return
+	}
 	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group, inviterId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -133,6 +151,25 @@ func GetLogsSelfStat(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
+	userId := c.GetInt("id")
+	if logType == model.LogTypeTopup {
+		money, err := model.SumUserTopUpMoney(userId, startTimestamp, endTimestamp)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data": gin.H{
+				"quota":       0,
+				"rpm":         0,
+				"tpm":         0,
+				"topup_money": money,
+			},
+		})
+		return
+	}
 	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group, 0)
 	if err != nil {
 		common.ApiError(c, err)

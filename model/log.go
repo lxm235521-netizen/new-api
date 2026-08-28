@@ -452,9 +452,10 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 }
 
 type Stat struct {
-	Quota int `json:"quota"`
-	Rpm   int `json:"rpm"`
-	Tpm   int `json:"tpm"`
+	Quota      int     `json:"quota"`
+	Rpm        int     `json:"rpm"`
+	Tpm        int     `json:"tpm"`
+	TopUpMoney float64 `json:"topup_money"`
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, inviterId int) (stat Stat, err error) {

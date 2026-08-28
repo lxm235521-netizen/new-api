@@ -232,6 +232,45 @@ func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err 
 	return topups, total, nil
 }
 
+func SumTopUpMoney(startTimestamp int64, endTimestamp int64, username string, inviterId int) (money float64, err error) {
+	tx := DB.Model(&TopUp{}).Select("COALESCE(SUM(top_ups.money), 0)").Where("top_ups.status = ?", common.TopUpStatusSuccess)
+	if startTimestamp != 0 {
+		tx = tx.Where("top_ups.create_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("top_ups.create_time <= ?", endTimestamp)
+	}
+	if username != "" || inviterId > 0 {
+		tx = tx.Joins("JOIN users ON users.id = top_ups.user_id")
+	}
+	if tx, err = applyExplicitLogTextFilter(tx, "users.username", username); err != nil {
+		return 0, err
+	}
+	if inviterId > 0 {
+		tx = tx.Where("users.inviter_id = ?", inviterId)
+	}
+	if err = tx.Scan(&money).Error; err != nil {
+		common.SysError("failed to query topup money stat: " + err.Error())
+		return 0, errors.New("查询充值统计数据失败")
+	}
+	return money, nil
+}
+
+func SumUserTopUpMoney(userId int, startTimestamp int64, endTimestamp int64) (money float64, err error) {
+	tx := DB.Model(&TopUp{}).Select("COALESCE(SUM(top_ups.money), 0)").Where("top_ups.user_id = ? AND top_ups.status = ?", userId, common.TopUpStatusSuccess)
+	if startTimestamp != 0 {
+		tx = tx.Where("top_ups.create_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("top_ups.create_time <= ?", endTimestamp)
+	}
+	if err = tx.Scan(&money).Error; err != nil {
+		common.SysError("failed to query user topup money stat: " + err.Error())
+		return 0, errors.New("查询充值统计数据失败")
+	}
+	return money, nil
+}
+
 // searchTopUpCountHardLimit 搜索充值记录时 COUNT 的安全上限，
 // 防止对超大表执行无界 COUNT 触发 DoS。
 const searchTopUpCountHardLimit = 10000

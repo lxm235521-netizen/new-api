@@ -142,8 +142,8 @@ const LogsFilters = ({
               className='w-full sm:w-auto min-w-[120px]'
               showClear
               pure
-              onChange={() => {
-                // 延迟执行搜索，让表单值先更新
+              onChange={(value) => {
+                setLogType(value ? parseInt(value) : 0);
                 setTimeout(() => {
                   refresh();
                 }, 0);
