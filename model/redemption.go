@@ -75,7 +75,7 @@ type RedemptionAuditStat struct {
 }
 
 func GetRedemptionAuditKeys(ids []int, userId int, isAdmin bool) (redemptions []*Redemption, err error) {
-	query := DB.Model(&Redemption{}).Select("id, name, key").Where("id IN ?", ids)
+	query := DB.Model(&Redemption{}).Select("id, name, " + commonKeyCol).Where("id IN ?", ids)
 	if !isAdmin {
 		query = query.Where("user_id = ?", userId)
 	}
