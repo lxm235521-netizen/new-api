@@ -35,6 +35,7 @@ const routerMap = {
   channel: '/console/channel',
   token: '/console/token',
   redemption: '/console/redemption',
+  audit: '/console/audit',
   topup: '/console/topup',
   user: '/console/user',
   subscription: '/console/subscription',
@@ -61,6 +62,14 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   } = useSidebar();
 
   const showSkeleton = useMinimumLoadingTime(sidebarLoading, 200);
+  const auditVisible = (() => {
+    if (isAdmin()) return true;
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}').can_manage_redemptions === true;
+    } catch {
+      return false;
+    }
+  })();
 
   const [selectedKeys, setSelectedKeys] = useState(['home']);
   const [chatItems, setChatItems] = useState([]);
@@ -174,8 +183,14 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       {
         text: t('兑换码管理'),
         itemKey: 'redemption',
-        to: '/redemption',
+        to: '/console/redemption',
         className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('管理员审计'),
+        itemKey: 'audit',
+        to: '/console/audit',
+        className: auditVisible ? '' : 'tableHiddle',
       },
       {
         text: t('用户管理'),
@@ -198,7 +213,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     });
 
     return filteredItems;
-  }, [isAdmin(), isRoot(), t, isModuleVisible]);
+  }, [isAdmin(), isRoot(), auditVisible, t, isModuleVisible]);
 
   const chatMenuItems = useMemo(() => {
     const items = [
@@ -480,6 +495,15 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           )}
 
           {/* 管理员区域 - 只在管理员时显示且配置允许时显示 */}
+          {auditVisible && !isAdmin() && (
+            <>
+              <Divider className='sidebar-divider' />
+              <div>
+                {!collapsed && <div className='sidebar-group-label'>{t('管理员审计')}</div>}
+                {renderNavItem({ text: t('管理员审计'), itemKey: 'audit', to: '/console/audit' })}
+              </div>
+            </>
+          )}
           {isAdmin() && hasSectionVisibleModules('admin') && (
             <>
               <Divider className='sidebar-divider' />

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
@@ -12,6 +13,78 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func GetRedemptionAudit(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	creatorId, _ := strconv.Atoi(c.Query("creator_id"))
+	creatorName := c.Query("creator_name")
+	usedUserId, _ := strconv.Atoi(c.Query("used_user_id"))
+	usedUserName := c.Query("used_user_name")
+	status, _ := strconv.Atoi(c.Query("status"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	redemptions, total, err := model.GetRedemptionAudit(c.GetInt("id"), isAdmin, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(redemptions)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func GetRedemptionAuditStat(c *gin.Context) {
+	creatorId, _ := strconv.Atoi(c.Query("creator_id"))
+	creatorName := c.Query("creator_name")
+	usedUserId, _ := strconv.Atoi(c.Query("used_user_id"))
+	usedUserName := c.Query("used_user_name")
+	status, _ := strconv.Atoi(c.Query("status"))
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	stat, err := model.GetRedemptionAuditStat(c.GetInt("id"), isAdmin, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stat)
+}
+
+type redemptionAuditIdsRequest struct {
+	Ids []int `json:"ids" binding:"required,min=1,max=100"`
+}
+
+func GetRedemptionAuditKeys(c *gin.Context) {
+	var request redemptionAuditIdsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	redemptions, err := model.GetRedemptionAuditKeys(request.Ids, c.GetInt("id"), isAdmin)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, redemptions)
+}
+
+func DeleteRedemptionsForAudit(c *gin.Context) {
+	var request redemptionAuditIdsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	deletedIds, rejected, err := model.DeleteRedemptionsForAudit(request.Ids, c.GetInt("id"), isAdmin)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted_ids": deletedIds, "rejected": rejected})
+}
 
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
@@ -79,6 +152,10 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCountPositive)
 		return
 	}
+	if redemption.Quota <= 0 {
+		common.ApiErrorI18n(c, i18n.MsgQuotaNegative)
+		return
+	}
 	if redemption.Count > 100 {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCountMax)
 		return
@@ -87,28 +164,14 @@ func AddRedemption(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
 	}
-	var keys []string
-	for i := 0; i < redemption.Count; i++ {
-		key := common.GetUUID()
-		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
-		}
-		err = cleanRedemption.Insert()
-		if err != nil {
-			common.SysError("failed to insert redemption: " + err.Error())
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": i18n.T(c, i18n.MsgRedemptionCreateFailed),
-				"data":    keys,
-			})
-			return
-		}
-		keys = append(keys, key)
+	keys, err := model.CreateRedemptions(c.GetInt("id"), &redemption)
+	if err != nil {
+		common.SysError("failed to insert redemptions: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": i18n.T(c, i18n.MsgRedemptionCreateFailed),
+		})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -120,7 +183,20 @@ func AddRedemption(c *gin.Context) {
 
 func DeleteRedemption(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	err := model.DeleteRedemptionById(id)
+	redemption, err := model.GetRedemptionById(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if redemption.Status == common.RedemptionCodeStatusUsed {
+		common.ApiError(c, errors.New("已使用的兑换码不能删除"))
+		return
+	}
+	if c.GetInt("role") < common.RoleAdminUser && redemption.UserId != c.GetInt("id") {
+		common.ApiError(c, errors.New("无权删除其他用户创建的兑换码"))
+		return
+	}
+	err = redemption.Delete()
 	if err != nil {
 		common.ApiError(c, err)
 		return

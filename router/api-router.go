@@ -294,6 +294,21 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		redemptionAuditRoute := apiRouter.Group("/redemption/audit")
+		redemptionAuditRoute.Use(middleware.RedemptionAuditAuth())
+		{
+			redemptionAuditRoute.GET("/", controller.GetRedemptionAudit)
+			redemptionAuditRoute.GET("/stat", controller.GetRedemptionAuditStat)
+			redemptionAuditRoute.POST("/keys", controller.GetRedemptionAuditKeys)
+			redemptionAuditRoute.POST("/delete", controller.DeleteRedemptionsForAudit)
+		}
+
+		redemptionCreateRoute := apiRouter.Group("/redemption/audit")
+		redemptionCreateRoute.Use(middleware.RedemptionCreateAuth())
+		{
+			redemptionCreateRoute.POST("/create", controller.AddRedemption)
+		}
+
 		redemptionRoute := apiRouter.Group("/redemption")
 		redemptionRoute.Use(middleware.AdminAuth())
 		{

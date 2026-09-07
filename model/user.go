@@ -27,8 +27,9 @@ type User struct {
 	Password         string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
 	OriginalPassword string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
 	DisplayName      string         `json:"display_name" gorm:"index" validate:"max=20"`
-	Role             int            `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status           int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Role                  int            `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status                int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	CanManageRedemptions  bool           `json:"can_manage_redemptions" gorm:"default:false"`
 	Email            string         `json:"email" gorm:"index" validate:"max=50"`
 	GitHubId         string         `json:"github_id" gorm:"column:github_id;index"`
 	DiscordId        string         `json:"discord_id" gorm:"column:discord_id;index"`
@@ -523,7 +524,8 @@ func (user *User) Edit(updatePassword bool) error {
 		"username":     newUser.Username,
 		"display_name": newUser.DisplayName,
 		"group":        newUser.Group,
-		"remark":       newUser.Remark,
+		"remark":                 newUser.Remark,
+		"can_manage_redemptions": newUser.CanManageRedemptions,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

@@ -34,6 +34,10 @@ func validUserInfo(username string, role int) bool {
 }
 
 func authHelper(c *gin.Context, minRole int) {
+	authHelperWithCheck(c, minRole, nil)
+}
+
+func authHelperWithCheck(c *gin.Context, minRole int, check func(*gin.Context) bool) {
 	session := sessions.Default(c)
 	username := session.Get("username")
 	role := session.Get("role")
@@ -153,6 +157,15 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Set("user_group", session.Get("group"))
 	c.Set("use_access_token", useAccessToken)
 
+	if check != nil && !check(c) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
+		})
+		c.Abort()
+		return
+	}
+
 	c.Next()
 }
 
@@ -177,6 +190,22 @@ func AdminAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelper(c, common.RoleAdminUser)
 	}
+}
+
+func RedemptionAuditAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelperWithCheck(c, common.RoleCommonUser, func(c *gin.Context) bool {
+			if c.GetInt("role") >= common.RoleAdminUser {
+				return true
+			}
+			user, err := model.GetUserById(c.GetInt("id"), false)
+			return err == nil && user.CanManageRedemptions
+		})
+	}
+}
+
+func RedemptionCreateAuth() func(c *gin.Context) {
+	return RedemptionAuditAuth()
 }
 
 func RootAuth() func(c *gin.Context) {

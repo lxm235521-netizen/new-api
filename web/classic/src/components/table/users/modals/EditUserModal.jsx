@@ -94,6 +94,7 @@ const EditUserModal = (props) => {
     quota_amount: 0,
     group: 'default',
     remark: '',
+    can_manage_redemptions: false,
   });
 
   const fetchGroups = async () => {
@@ -391,6 +392,13 @@ const EditUserModal = (props) => {
                         </Form.Slot>
                       </Col>
 
+                      <Col span={24}>
+                        <Form.Switch
+                          field='can_manage_redemptions'
+                          label={t('允许创建兑换码和访问管理员审计')}
+                          extraText={t('可创建兑换码，并只能查看自己创建的兑换码记录和统计')}
+                        />
+                      </Col>
                       <Col span={24}>
                         <div
                           className='text-xs cursor-pointer'

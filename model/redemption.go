@@ -22,8 +22,182 @@ type Redemption struct {
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
+	CreatorName  string         `json:"creator_name" gorm:"->"`
+	UsedUserName string         `json:"used_user_name" gorm:"->"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+}
+
+func GetRedemptionAudit(userId int, isAdmin bool, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+	query := DB.Model(&Redemption{}).
+		Select("redemptions.id, redemptions.user_id, redemptions.status, redemptions.name, redemptions.quota, redemptions.created_time, redemptions.redeemed_time, redemptions.used_user_id, redemptions.expired_time, creator.username AS creator_name, used_user.username AS used_user_name").
+		Joins("JOIN users AS creator ON creator.id = redemptions.user_id").
+		Joins("LEFT JOIN users AS used_user ON used_user.id = redemptions.used_user_id")
+	if !isAdmin {
+		query = query.Where("redemptions.user_id = ?", userId)
+	} else if creatorId > 0 {
+		query = query.Where("redemptions.user_id = ?", creatorId)
+	}
+	if creatorName != "" {
+		query = query.Where("creator.username LIKE ? OR creator.display_name LIKE ?", "%"+creatorName+"%", "%"+creatorName+"%")
+	}
+	if usedUserId > 0 {
+		query = query.Where("redemptions.used_user_id = ?", usedUserId)
+	}
+	if usedUserName != "" {
+		query = query.Where("used_user.username LIKE ? OR used_user.display_name LIKE ?", "%"+usedUserName+"%", "%"+usedUserName+"%")
+	}
+	if startTimestamp != 0 {
+		query = query.Where("redemptions.created_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		query = query.Where("redemptions.created_time <= ?", endTimestamp)
+	}
+	if status != 0 {
+		query = query.Where("redemptions.status = ?", status)
+	}
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err = query.Order("redemptions.created_time desc, redemptions.id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+	return redemptions, total, nil
+}
+
+type RedemptionAuditStat struct {
+	CreatedQuota  int64 `json:"created_quota"`
+	RedeemedQuota int64 `json:"redeemed_quota"`
+	UnusedQuota   int64 `json:"unused_quota"`
+	CreatedCount  int64 `json:"created_count"`
+	RedeemedCount int64 `json:"redeemed_count"`
+	UnusedCount   int64 `json:"unused_count"`
+}
+
+func GetRedemptionAuditKeys(ids []int, userId int, isAdmin bool) (redemptions []*Redemption, err error) {
+	query := DB.Model(&Redemption{}).Select("id, name, key").Where("id IN ?", ids)
+	if !isAdmin {
+		query = query.Where("user_id = ?", userId)
+	}
+	err = query.Order("id asc").Find(&redemptions).Error
+	return redemptions, err
+}
+
+type RedemptionAuditDeleteRejection struct {
+	Id     int    `json:"id"`
+	Reason string `json:"reason"`
+}
+
+func DeleteRedemptionsForAudit(ids []int, userId int, isAdmin bool) (deletedIds []int, rejected []RedemptionAuditDeleteRejection, err error) {
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return nil, nil, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var redemptions []Redemption
+	redemptionQuery := tx.Where("id IN ?", ids)
+	if !common.UsingSQLite {
+		redemptionQuery = redemptionQuery.Set("gorm:query_option", "FOR UPDATE")
+	}
+	if err = redemptionQuery.Find(&redemptions).Error; err != nil {
+		tx.Rollback()
+		return nil, nil, err
+	}
+	found := make(map[int]Redemption, len(redemptions))
+	for _, redemption := range redemptions {
+		found[redemption.Id] = redemption
+	}
+	for _, id := range ids {
+		redemption, ok := found[id]
+		if !ok {
+			rejected = append(rejected, RedemptionAuditDeleteRejection{Id: id, Reason: "not_found"})
+			continue
+		}
+		if !isAdmin && redemption.UserId != userId {
+			rejected = append(rejected, RedemptionAuditDeleteRejection{Id: id, Reason: "forbidden"})
+			continue
+		}
+		if redemption.Status == common.RedemptionCodeStatusUsed {
+			rejected = append(rejected, RedemptionAuditDeleteRejection{Id: id, Reason: "used"})
+			continue
+		}
+		result := tx.Where("id = ? AND status <> ?", id, common.RedemptionCodeStatusUsed).Delete(&Redemption{})
+		if result.Error != nil {
+			tx.Rollback()
+			return nil, nil, result.Error
+		}
+		if result.RowsAffected == 0 {
+			var current Redemption
+			lookupErr := tx.Where("id = ?", id).First(&current).Error
+			if lookupErr != nil {
+				if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+					rejected = append(rejected, RedemptionAuditDeleteRejection{Id: id, Reason: "not_found"})
+					continue
+				}
+				tx.Rollback()
+				return nil, nil, lookupErr
+			}
+			reason := "not_found"
+			if current.Status == common.RedemptionCodeStatusUsed {
+				reason = "used"
+			}
+			rejected = append(rejected, RedemptionAuditDeleteRejection{Id: id, Reason: reason})
+			continue
+		}
+		deletedIds = append(deletedIds, id)
+	}
+	if err = tx.Commit().Error; err != nil {
+		return nil, nil, err
+	}
+	return deletedIds, rejected, nil
+}
+
+func GetRedemptionAuditStat(userId int, isAdmin bool, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int) (stat RedemptionAuditStat, err error) {
+	query := DB.Model(&Redemption{}).
+		Select(`
+			COALESCE(SUM(redemptions.quota), 0) AS created_quota,
+			COALESCE(SUM(CASE WHEN redemptions.status = ? THEN redemptions.quota ELSE 0 END), 0) AS redeemed_quota,
+			COALESCE(SUM(CASE WHEN redemptions.status <> ? THEN redemptions.quota ELSE 0 END), 0) AS unused_quota,
+			COUNT(*) AS created_count,
+			COALESCE(SUM(CASE WHEN redemptions.status = ? THEN 1 ELSE 0 END), 0) AS redeemed_count,
+			COALESCE(SUM(CASE WHEN redemptions.status <> ? THEN 1 ELSE 0 END), 0) AS unused_count`,
+			common.RedemptionCodeStatusUsed,
+			common.RedemptionCodeStatusUsed,
+			common.RedemptionCodeStatusUsed,
+			common.RedemptionCodeStatusUsed,
+		).
+		Joins("JOIN users AS creator ON creator.id = redemptions.user_id").
+		Joins("LEFT JOIN users AS used_user ON used_user.id = redemptions.used_user_id")
+	if !isAdmin {
+		query = query.Where("redemptions.user_id = ?", userId)
+	} else if creatorId > 0 {
+		query = query.Where("redemptions.user_id = ?", creatorId)
+	}
+	if creatorName != "" {
+		query = query.Where("creator.username LIKE ? OR creator.display_name LIKE ?", "%"+creatorName+"%", "%"+creatorName+"%")
+	}
+	if usedUserId > 0 {
+		query = query.Where("redemptions.used_user_id = ?", usedUserId)
+	}
+	if usedUserName != "" {
+		query = query.Where("used_user.username LIKE ? OR used_user.display_name LIKE ?", "%"+usedUserName+"%", "%"+usedUserName+"%")
+	}
+	if startTimestamp != 0 {
+		query = query.Where("redemptions.created_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		query = query.Where("redemptions.created_time <= ?", endTimestamp)
+	}
+	if status != 0 {
+		query = query.Where("redemptions.status = ?", status)
+	}
+	err = query.Scan(&stat).Error
+	return stat, err
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -155,6 +329,28 @@ func Redeem(key string, userId int) (quota int, err error) {
 	return redemption.Quota, nil
 }
 
+func CreateRedemptions(userId int, redemption *Redemption) (keys []string, err error) {
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		for i := 0; i < redemption.Count; i++ {
+			key := common.GetUUID()
+			cleanRedemption := Redemption{
+				UserId:      userId,
+				Name:        redemption.Name,
+				Key:         key,
+				CreatedTime: common.GetTimestamp(),
+				Quota:       redemption.Quota,
+				ExpiredTime: redemption.ExpiredTime,
+			}
+			if err := tx.Create(&cleanRedemption).Error; err != nil {
+				return err
+			}
+			keys = append(keys, key)
+		}
+		return nil
+	})
+	return keys, err
+}
+
 func (redemption *Redemption) Insert() error {
 	var err error
 	err = DB.Create(redemption).Error
@@ -174,9 +370,17 @@ func (redemption *Redemption) Update() error {
 }
 
 func (redemption *Redemption) Delete() error {
-	var err error
-	err = DB.Delete(redemption).Error
-	return err
+	if redemption.Status == common.RedemptionCodeStatusUsed {
+		return errors.New("已使用的兑换码不能删除")
+	}
+	result := DB.Where("status <> ?", common.RedemptionCodeStatusUsed).Delete(redemption)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("已使用的兑换码不能删除")
+	}
+	return nil
 }
 
 func DeleteRedemptionById(id int) (err error) {
@@ -188,11 +392,14 @@ func DeleteRedemptionById(id int) (err error) {
 	if err != nil {
 		return err
 	}
+	if redemption.Status == common.RedemptionCodeStatusUsed {
+		return errors.New("已使用的兑换码不能删除")
+	}
 	return redemption.Delete()
 }
 
 func DeleteInvalidRedemptions() (int64, error) {
 	now := common.GetTimestamp()
-	result := DB.Where("status IN ? OR (status = ? AND expired_time != 0 AND expired_time < ?)", []int{common.RedemptionCodeStatusUsed, common.RedemptionCodeStatusDisabled}, common.RedemptionCodeStatusEnabled, now).Delete(&Redemption{})
+	result := DB.Where("status = ? OR (status = ? AND expired_time != 0 AND expired_time < ?)", common.RedemptionCodeStatusDisabled, common.RedemptionCodeStatusEnabled, now).Delete(&Redemption{})
 	return result.RowsAffected, result.Error
 }

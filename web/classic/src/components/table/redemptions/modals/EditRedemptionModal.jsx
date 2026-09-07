@@ -133,7 +133,7 @@ const EditRedemptionModal = (props) => {
         id: parseInt(props.editingRedemption.id),
       });
     } else {
-      res = await API.post(`/api/redemption/`, {
+      res = await API.post(props.createUrl || `/api/redemption/`, {
         ...localInputs,
       });
     }
@@ -152,7 +152,7 @@ const EditRedemptionModal = (props) => {
     } else {
       showError(message);
     }
-    if (!isEdit && data) {
+    if (!isEdit && success && data?.length) {
       let text = '';
       for (let i = 0; i < data.length; i++) {
         text += data[i] + '\n';
