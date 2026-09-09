@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { history } from './history';
+import { useUserPermissions } from '../hooks/common/useUserPermissions';
+import Loading from '../components/common/ui/Loading';
 
 export function authHeader() {
   // return authorization header with jwt token
@@ -49,6 +51,18 @@ function PrivateRoute({ children }) {
   return children;
 }
 
+export function AdminPermissionRoute({ permission, children }) {
+  const raw = localStorage.getItem('user');
+  const { loading, error, hasAdminPermission } = useUserPermissions();
+
+  if (!raw) {
+    return <Navigate to='/login' state={{ from: history.location }} />;
+  }
+  if (loading) return <Loading />;
+  if (error) return <Navigate to='/forbidden' replace />;
+  return hasAdminPermission(permission) ? children : <Navigate to='/forbidden' replace />;
+}
+
 export function AdminRoute({ children }) {
   const raw = localStorage.getItem('user');
   if (!raw) {
@@ -67,18 +81,13 @@ export function AdminRoute({ children }) {
 
 export function AuditRoute({ children }) {
   const raw = localStorage.getItem('user');
+  const { loading, hasAdminPermission, canManageRedemptions, role } = useUserPermissions();
+
   if (!raw) {
     return <Navigate to='/login' state={{ from: history.location }} />;
   }
-  try {
-    const user = JSON.parse(raw);
-    if (user && (user.role >= 10 || user.can_manage_redemptions === true)) {
-      return children;
-    }
-  } catch (e) {
-    // ignore
-  }
-  return <Navigate to='/forbidden' replace />;
+  if (loading) return null;
+  return hasAdminPermission('audit') || (role < 10 && canManageRedemptions) ? children : <Navigate to='/forbidden' replace />;
 }
 
 export { PrivateRoute };

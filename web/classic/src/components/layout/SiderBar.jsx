@@ -25,7 +25,8 @@ import { ChevronLeft } from 'lucide-react';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
-import { isAdmin, isRoot, showError } from '../../helpers';
+import { isAdmin, showError } from '../../helpers';
+import { useUserPermissions } from '../../hooks/common/useUserPermissions';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
 import { Nav, Divider, Button } from '@douyinfe/semi-ui';
@@ -61,15 +62,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     loading: sidebarLoading,
   } = useSidebar();
 
-  const showSkeleton = useMinimumLoadingTime(sidebarLoading, 200);
-  const auditVisible = (() => {
-    if (isAdmin()) return true;
-    try {
-      return JSON.parse(localStorage.getItem('user') || '{}').can_manage_redemptions === true;
-    } catch {
-      return false;
-    }
-  })();
+  const {
+    hasAdminPermission,
+    canManageRedemptions,
+    loading: permissionLoading,
+  } = useUserPermissions();
+  const showSkeleton = useMinimumLoadingTime(sidebarLoading || permissionLoading, 200);
 
   const [selectedKeys, setSelectedKeys] = useState(['home']);
   const [chatItems, setChatItems] = useState([]);
@@ -160,49 +158,43 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('渠道管理'),
         itemKey: 'channel',
         to: '/channel',
-        className: isAdmin() ? '' : 'tableHiddle',
+        className: hasAdminPermission('channel') ? '' : 'tableHiddle',
       },
       {
         text: t('订阅管理'),
         itemKey: 'subscription',
         to: '/subscription',
-        className: isAdmin() ? '' : 'tableHiddle',
+        className: hasAdminPermission('subscription') ? '' : 'tableHiddle',
       },
       {
         text: t('模型管理'),
         itemKey: 'models',
         to: '/console/models',
-        className: isAdmin() ? '' : 'tableHiddle',
+        className: hasAdminPermission('models') ? '' : 'tableHiddle',
       },
       {
         text: t('模型部署'),
         itemKey: 'deployment',
         to: '/deployment',
-        className: isAdmin() ? '' : 'tableHiddle',
+        className: hasAdminPermission('deployment') ? '' : 'tableHiddle',
       },
       {
         text: t('兑换码管理'),
-        itemKey: 'redemption',
-        to: '/console/redemption',
-        className: isAdmin() ? '' : 'tableHiddle',
-      },
-      {
-        text: t('管理员审计'),
         itemKey: 'audit',
         to: '/console/audit',
-        className: auditVisible ? '' : 'tableHiddle',
+        className: hasAdminPermission('audit') ? '' : 'tableHiddle',
       },
       {
         text: t('用户管理'),
         itemKey: 'user',
         to: '/user',
-        className: isAdmin() ? '' : 'tableHiddle',
+        className: hasAdminPermission('user') ? '' : 'tableHiddle',
       },
       {
         text: t('系统设置'),
         itemKey: 'setting',
         to: '/setting',
-        className: isRoot() ? '' : 'tableHiddle',
+        className: hasAdminPermission('setting') ? '' : 'tableHiddle',
       },
     ];
 
@@ -213,7 +205,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     });
 
     return filteredItems;
-  }, [isAdmin(), isRoot(), auditVisible, t, isModuleVisible]);
+  }, [hasAdminPermission, t, isModuleVisible]);
 
   const chatMenuItems = useMemo(() => {
     const items = [
@@ -495,12 +487,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           )}
 
           {/* 管理员区域 - 只在管理员时显示且配置允许时显示 */}
-          {auditVisible && !isAdmin() && (
+          {!isAdmin() && canManageRedemptions && (
             <>
               <Divider className='sidebar-divider' />
               <div>
-                {!collapsed && <div className='sidebar-group-label'>{t('管理员审计')}</div>}
-                {renderNavItem({ text: t('管理员审计'), itemKey: 'audit', to: '/console/audit' })}
+                {!collapsed && <div className='sidebar-group-label'>{t('兑换码管理')}</div>}
+                {renderNavItem({ text: t('兑换码管理'), itemKey: 'audit', to: '/console/audit' })}
               </div>
             </>
           )}

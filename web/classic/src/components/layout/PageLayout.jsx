@@ -57,6 +57,7 @@ const PageLayout = () => {
     '/console/channel',
     '/console/log',
     '/console/redemption',
+    '/console/audit',
     '/console/user',
     '/console/token',
     '/console/midjourney',

@@ -47,6 +47,7 @@ import {
   InputNumber,
   RadioGroup,
   Radio,
+  Switch,
 } from '@douyinfe/semi-ui';
 import {
   IconUser,
@@ -57,6 +58,7 @@ import {
   IconEdit,
 } from '@douyinfe/semi-icons';
 import UserBindingManagementModal from './UserBindingManagementModal';
+import { useUserPermissions } from '../../../../hooks/common/useUserPermissions';
 
 const { Text, Title } = Typography;
 
@@ -76,6 +78,30 @@ const EditUserModal = (props) => {
   const [showAdjustQuotaRaw, setShowAdjustQuotaRaw] = useState(false);
   const [showQuotaInput, setShowQuotaInput] = useState(false);
   const [inputs, setInputs] = useState(null);
+  const { hasAdminPermission, isRoot, loading: permissionLoading } = useUserPermissions();
+  const [adminPermissions, setAdminPermissions] = useState({
+    channel: false,
+    models: false,
+    deployment: false,
+    subscription: false,
+    redemption: false,
+    audit: false,
+    user: false,
+    setting: false,
+    permission_management: false,
+  });
+  const [adminPermissionsLoaded, setAdminPermissionsLoaded] = useState(false);
+  const [adminPermissionsLoading, setAdminPermissionsLoading] = useState(false);
+  const adminPermissionOptions = [
+    ['channel', '渠道管理'],
+    ['subscription', '订阅管理'],
+    ['models', '模型管理'],
+    ['deployment', '模型部署'],
+    ['audit', '兑换码管理'],
+    ['user', '用户管理'],
+    ['setting', '系统设置'],
+    ['permission_management', '权限管理'],
+  ];
 
   const isEdit = Boolean(userId);
 
@@ -94,7 +120,6 @@ const EditUserModal = (props) => {
     quota_amount: 0,
     group: 'default',
     remark: '',
-    can_manage_redemptions: false,
   });
 
   const fetchGroups = async () => {
@@ -110,17 +135,59 @@ const EditUserModal = (props) => {
 
   const loadUser = async () => {
     setLoading(true);
+    setAdminPermissionsLoaded(false);
+    setAdminPermissionsLoading(false);
+    setAdminPermissions({
+      channel: false,
+      models: false,
+      deployment: false,
+      subscription: false,
+      redemption: false,
+      audit: false,
+      user: false,
+      setting: false,
+      permission_management: false,
+    });
     const url = userId ? `/api/user/${userId}` : `/api/user/self`;
     const res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
       data.password = '';
-      data.quota_amount = Number(
-        quotaToDisplayAmount(data.quota || 0).toFixed(6),
-      );
       setInputs({ ...getInitValues(), ...data });
+      if (data.role === 10 && hasAdminPermission('permission_management')) {
+        setAdminPermissionsLoading(true);
+        try {
+          const permissionRes = await API.get(`/api/user/${userId}/admin-permissions`);
+          if (permissionRes.data.success) {
+            const permissionData = permissionRes.data.data || {};
+            setAdminPermissions({
+              channel: permissionData.channel === true,
+              models: permissionData.models === true,
+              deployment: permissionData.deployment === true,
+              subscription: permissionData.subscription === true,
+              redemption: false,
+              audit: permissionData.audit === true,
+              user: permissionData.user === true,
+              setting: permissionData.setting === true,
+              permission_management: permissionData.permission_management === true,
+            });
+            setAdminPermissionsLoaded(true);
+          } else {
+            showError(permissionRes.data.message);
+            setAdminPermissionsLoaded(false);
+          }
+        } catch (e) {
+          showError(e.message);
+          setAdminPermissionsLoaded(false);
+        } finally {
+          setAdminPermissionsLoading(false);
+        }
+      } else {
+        setAdminPermissionsLoaded(true);
+      }
     } else {
       showError(message);
+      setAdminPermissionsLoaded(true);
     }
     setLoading(false);
   };
@@ -132,10 +199,13 @@ const EditUserModal = (props) => {
   }, [inputs]);
 
   useEffect(() => {
-    loadUser();
-    if (userId) fetchGroups();
-    setBindingModalVisible(false);
-  }, [props.editingUser.id]);
+    if (permissionLoading) return;
+    if (props.visible) {
+      loadUser();
+      if (userId) fetchGroups();
+      setBindingModalVisible(false);
+    }
+  }, [props.editingUser.id, permissionLoading, props.visible]);
 
   const openBindingModal = () => {
     setBindingModalVisible(true);
@@ -147,12 +217,27 @@ const EditUserModal = (props) => {
 
   /* ----------------------- submit ----------------------- */
   const submit = async (values) => {
+    const targetRole = Number(values.role ?? inputs?.role);
+    const shouldUpdateAdminPermissions =
+      userId &&
+      targetRole === 10 &&
+      hasAdminPermission('permission_management');
+    if (shouldUpdateAdminPermissions && (!adminPermissionsLoaded || adminPermissionsLoading)) {
+      showError(t('管理员权限仍在加载，请稍后重试'));
+      return;
+    }
+
     setLoading(true);
     let payload = { ...values };
     delete payload.quota;
     delete payload.quota_amount;
+    delete payload.can_manage_redemptions;
     if (userId) {
       payload.id = parseInt(userId);
+      payload.role = targetRole;
+    }
+    if (shouldUpdateAdminPermissions) {
+      payload.admin_permissions = adminPermissions;
     }
     const url = userId ? `/api/user/` : `/api/user/self`;
     const res = await API.put(url, payload);
@@ -392,13 +477,29 @@ const EditUserModal = (props) => {
                         </Form.Slot>
                       </Col>
 
-                      <Col span={24}>
-                        <Form.Switch
-                          field='can_manage_redemptions'
-                          label={t('允许创建兑换码和访问管理员审计')}
-                          extraText={t('可创建兑换码，并只能查看自己创建的兑换码记录和统计')}
-                        />
-                      </Col>
+                      {inputs?.role === 10 && hasAdminPermission('permission_management') && (
+                        <Col span={24}>
+                          <Form.Slot label={t('管理员菜单权限')}>
+                            <div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
+                              {adminPermissionOptions.map(([key, label]) => (
+                                <div key={key} className='flex items-center gap-2'>
+                                  <Switch
+                                    checked={adminPermissions[key] === true}
+                                    disabled={!isRoot() && !hasAdminPermission(key)}
+                                    onChange={(value) =>
+                                      setAdminPermissions((current) => ({
+                                        ...current,
+                                        [key]: value === true,
+                                      }))
+                                    }
+                                  />
+                                  <Text>{t(label)}</Text>
+                                </div>
+                              ))}
+                            </div>
+                          </Form.Slot>
+                        </Col>
+                      )}
                       <Col span={24}>
                         <div
                           className='text-xs cursor-pointer'

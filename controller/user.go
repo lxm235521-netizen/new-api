@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,7 +35,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	var loginRequest LoginRequest
-	err := json.NewDecoder(c.Request.Body).Decode(&loginRequest)
+	err := common.DecodeJson(c.Request.Body, &loginRequest)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -108,13 +107,14 @@ func setupLogin(user *model.User, c *gin.Context) {
 		"message": "",
 		"success": true,
 		"data": map[string]any{
-			"id":           user.Id,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"role":         user.Role,
-			"status":       user.Status,
-			"group":        user.Group,
+			"id":                     user.Id,
+			"username":               user.Username,
+			"display_name":           user.DisplayName,
+			"role":                   user.Role,
+			"status":                 user.Status,
+			"group":                  user.Group,
 			"can_manage_redemptions": user.CanManageRedemptions,
+			"admin_permissions":      user.AdminPermissionMap(),
 		},
 	})
 }
@@ -146,7 +146,7 @@ func Register(c *gin.Context) {
 		return
 	}
 	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	err := common.DecodeJson(c.Request.Body, &user)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -279,6 +279,79 @@ func SearchUsers(c *gin.Context) {
 
 func canManageTargetRole(myRole int, targetRole int) bool {
 	return myRole == common.RoleRootUser || myRole > targetRole
+}
+
+type AdminPermissionsRequest struct {
+	Permissions map[string]bool `json:"permissions"`
+}
+
+func canManageAdminPermissions(operator *model.User, target *model.User) bool {
+	return target.Role == common.RoleAdminUser && operator.Id != target.Id && operator.HasAdminPermission(model.AdminPermissionManagement)
+}
+
+func GetAdminPermissions(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	operator, err := model.GetUserById(c.GetInt("id"), false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	target, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !canManageAdminPermissions(operator, target) {
+		common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+		return
+	}
+	common.ApiSuccess(c, target.AdminPermissionMap())
+}
+
+func UpdateAdminPermissions(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	var request AdminPermissionsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	operator, err := model.GetUserById(c.GetInt("id"), false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	target, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !canManageAdminPermissions(operator, target) {
+		common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+		return
+	}
+	for permission, enabled := range request.Permissions {
+		if enabled && !operator.HasExplicitAdminPermission(permission) {
+			common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+			return
+		}
+	}
+	if _, err := model.NormalizeAdminPermissions(request.Permissions); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := target.UpdateAdminPermissions(request.Permissions); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, target.AdminPermissionMap())
 }
 
 func GetUser(c *gin.Context) {
@@ -436,8 +509,9 @@ func GetSelf(c *gin.Context) {
 		"setting":           user.Setting,
 		"stripe_customer":   user.StripeCustomer,
 		"can_manage_redemptions": user.CanManageRedemptions,
-		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":       permissions,                // 新增权限字段
+		"admin_permissions":      user.AdminPermissionMap(),
+		"sidebar_modules":        userSetting.SidebarModules,
+		"permissions":            permissions,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -451,28 +525,8 @@ func GetSelf(c *gin.Context) {
 // 计算用户权限的辅助函数
 func calculateUserPermissions(userRole int) map[string]interface{} {
 	permissions := map[string]interface{}{}
-
-	// 根据用户角色计算权限
-	if userRole == common.RoleRootUser {
-		// 超级管理员不需要边栏设置功能
-		permissions["sidebar_settings"] = false
-		permissions["sidebar_modules"] = map[string]interface{}{}
-	} else if userRole == common.RoleAdminUser {
-		// 管理员可以设置边栏，但不包含系统设置功能
-		permissions["sidebar_settings"] = true
-		permissions["sidebar_modules"] = map[string]interface{}{
-			"admin": map[string]interface{}{
-				"setting": false, // 管理员不能访问系统设置
-			},
-		}
-	} else {
-		// 普通用户只能设置个人功能，不包含管理员区域
-		permissions["sidebar_settings"] = true
-		permissions["sidebar_modules"] = map[string]interface{}{
-			"admin": false, // 普通用户不能访问管理员区域
-		}
-	}
-
+	permissions["sidebar_settings"] = userRole >= common.RoleCommonUser
+	permissions["sidebar_modules"] = map[string]interface{}{}
 	return permissions
 }
 
@@ -529,7 +583,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 	// 普通用户不包含admin区域
 
 	// 转换为JSON字符串
-	configBytes, err := json.Marshal(defaultConfig)
+	configBytes, err := common.Marshal(defaultConfig)
 	if err != nil {
 		common.SysLog("生成默认边栏配置失败: " + err.Error())
 		return ""
@@ -565,9 +619,15 @@ func GetUserModels(c *gin.Context) {
 	return
 }
 
+type UpdateUserRequest struct {
+	model.User
+	AdminPermissions map[string]bool `json:"admin_permissions"`
+}
+
 func UpdateUser(c *gin.Context) {
-	var updatedUser model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)
+	var request UpdateUserRequest
+	err := common.DecodeJson(c.Request.Body, &request)
+	updatedUser := request.User
 	if err != nil || updatedUser.Id == 0 {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -579,13 +639,21 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
-	originUser, err := model.GetUserById(updatedUser.Id, false)
+	operator, err := model.GetUserById(c.GetInt("id"), false)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	target, err := model.GetUserById(updatedUser.Id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if updatedUser.Role == 0 {
+		updatedUser.Role = target.Role
+	}
 	myRole := c.GetInt("role")
-	if !canManageTargetRole(myRole, originUser.Role) {
+	if !canManageTargetRole(myRole, target.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
 	}
@@ -593,10 +661,37 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
+	if myRole != common.RoleRootUser {
+		updatedUser.CanManageRedemptions = target.CanManageRedemptions
+	}
+	adminPermissionsProvided := request.AdminPermissions != nil
+	if adminPermissionsProvided {
+		if !canManageAdminPermissions(operator, target) {
+			common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+			return
+		}
+		if target.Role != common.RoleAdminUser || updatedUser.Role != common.RoleAdminUser {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		for permission, enabled := range request.AdminPermissions {
+			if enabled && !operator.HasExplicitAdminPermission(permission) {
+				common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+				return
+			}
+		}
+		if err := target.SetAdminPermissions(request.AdminPermissions); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
 	}
 	updatePassword := updatedUser.Password != ""
+	if adminPermissionsProvided {
+		updatedUser.AdminPermissions = target.AdminPermissions
+	}
 	if err := updatedUser.Edit(updatePassword); err != nil {
 		common.ApiError(c, err)
 		return
@@ -648,7 +743,7 @@ func AdminClearUserBinding(c *gin.Context) {
 
 func UpdateSelf(c *gin.Context) {
 	var requestData map[string]interface{}
-	err := json.NewDecoder(c.Request.Body).Decode(&requestData)
+	err := common.DecodeJson(c.Request.Body, &requestData)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -712,12 +807,12 @@ func UpdateSelf(c *gin.Context) {
 
 	// 原有的用户信息更新逻辑
 	var user model.User
-	requestDataBytes, err := json.Marshal(requestData)
+	requestDataBytes, err := common.Marshal(requestData)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	err = json.Unmarshal(requestDataBytes, &user)
+	err = common.Unmarshal(requestDataBytes, &user)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
@@ -829,7 +924,7 @@ func DeleteSelf(c *gin.Context) {
 
 func CreateUser(c *gin.Context) {
 	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	err := common.DecodeJson(c.Request.Body, &user)
 	user.Username = strings.TrimSpace(user.Username)
 	if err != nil || user.Username == "" || user.Password == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
@@ -876,7 +971,7 @@ type ManageRequest struct {
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest
-	err := json.NewDecoder(c.Request.Body).Decode(&req)
+	err := common.DecodeJson(c.Request.Body, &req)
 
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)

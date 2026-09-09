@@ -105,7 +105,7 @@ export default function SettingsSidebarModulesUser() {
         channel: isSidebarModuleAllowed('admin', 'channel'),
         models: isSidebarModuleAllowed('admin', 'models'),
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
-        redemption: isSidebarModuleAllowed('admin', 'redemption'),
+        audit: isSidebarModuleAllowed('admin', 'audit'),
         user: isSidebarModuleAllowed('admin', 'user'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
       };
@@ -345,9 +345,9 @@ export default function SettingsSidebarModulesUser() {
           description: t('模型部署管理'),
         },
         {
-          key: 'redemption',
+          key: 'audit',
           title: t('兑换码管理'),
-          description: t('兑换码生成管理'),
+          description: t('兑换码审核和创建管理'),
         },
         { key: 'user', title: t('用户管理'), description: t('用户账户管理') },
         {

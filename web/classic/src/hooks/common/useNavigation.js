@@ -51,6 +51,11 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         itemKey: 'pricing',
         to: '/pricing',
       },
+      {
+        text: t('在线使用'),
+        itemKey: 'onlineUse',
+        to: '/online-use',
+      },
       ...(docsLink
         ? [
             {
@@ -70,11 +75,6 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         text: t('插件下载'),
         itemKey: 'plugins',
         to: '/plugins',
-      },
-      {
-        text: t('在线使用'),
-        itemKey: 'onlineUse',
-        to: '/online-use',
       },
     ];
 

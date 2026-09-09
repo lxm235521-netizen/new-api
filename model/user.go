@@ -2,7 +2,6 @@ package model
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -19,29 +18,62 @@ import (
 
 const UserNameMaxLength = 20
 
+const (
+	AdminPermissionChannel             = "channel"
+	AdminPermissionModels              = "models"
+	AdminPermissionDeployment          = "deployment"
+	AdminPermissionSubscription        = "subscription"
+	AdminPermissionRedemption          = "redemption"
+	AdminPermissionAudit               = "audit"
+	AdminPermissionUser                = "user"
+	AdminPermissionSetting             = "setting"
+	AdminPermissionManagement          = "permission_management"
+)
+
+var adminPermissionKeys = []string{
+	AdminPermissionChannel,
+	AdminPermissionModels,
+	AdminPermissionDeployment,
+	AdminPermissionSubscription,
+	AdminPermissionRedemption,
+	AdminPermissionAudit,
+	AdminPermissionUser,
+	AdminPermissionSetting,
+	AdminPermissionManagement,
+}
+
+func DefaultAdminPermissions() map[string]bool {
+	permissions := map[string]bool{}
+	for _, key := range adminPermissionKeys {
+		permissions[key] = false
+	}
+	return permissions
+}
+
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
-	Id               int            `json:"id"`
-	Username         string         `json:"username" gorm:"unique;index" validate:"max=20"`
-	Password         string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
-	OriginalPassword string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
-	DisplayName      string         `json:"display_name" gorm:"index" validate:"max=20"`
-	Role                  int            `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status                int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	CanManageRedemptions  bool           `json:"can_manage_redemptions" gorm:"default:false"`
-	Email            string         `json:"email" gorm:"index" validate:"max=50"`
-	GitHubId         string         `json:"github_id" gorm:"column:github_id;index"`
-	DiscordId        string         `json:"discord_id" gorm:"column:discord_id;index"`
-	OidcId           string         `json:"oidc_id" gorm:"column:oidc_id;index"`
-	WeChatId         string         `json:"wechat_id" gorm:"column:wechat_id;index"`
-	TelegramId       string         `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken      *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
-	Quota            int            `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
-	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
+	Id                   int            `json:"id"`
+	Username             string         `json:"username" gorm:"unique;index" validate:"max=20"`
+	Password             string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
+	OriginalPassword     string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
+	DisplayName          string         `json:"display_name" gorm:"index" validate:"max=20"`
+	Role                 int            `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status               int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	CanManageRedemptions bool           `json:"can_manage_redemptions" gorm:"default:false"`
+	AdminPermissions     string         `json:"-" gorm:"type:text;column:admin_permissions"`
+	Email                string         `json:"email" gorm:"index" validate:"max=50"`
+	GitHubId             string         `json:"github_id" gorm:"column:github_id;index"`
+	DiscordId            string         `json:"discord_id" gorm:"column:discord_id;index"`
+	OidcId               string         `json:"oidc_id" gorm:"column:oidc_id;index"`
+	WeChatId             string         `json:"wechat_id" gorm:"column:wechat_id;index"`
+	TelegramId           string         `json:"telegram_id" gorm:"column:telegram_id;index"`
+	VerificationCode    string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
+	AccessToken         *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	Quota               int            `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota           int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
+	RequestCount        int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	Group               string         `json:"group" gorm:"type:varchar(64);default:'default'"`
 	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota         int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -83,7 +115,7 @@ func (user *User) SetAccessToken(token string) {
 func (user *User) GetSetting() dto.UserSetting {
 	setting := dto.UserSetting{}
 	if user.Setting != "" {
-		err := json.Unmarshal([]byte(user.Setting), &setting)
+		err := common.UnmarshalJsonStr(user.Setting, &setting)
 		if err != nil {
 			common.SysLog("failed to unmarshal setting: " + err.Error())
 		}
@@ -92,12 +124,121 @@ func (user *User) GetSetting() dto.UserSetting {
 }
 
 func (user *User) SetSetting(setting dto.UserSetting) {
-	settingBytes, err := json.Marshal(setting)
+	settingBytes, err := common.Marshal(setting)
 	if err != nil {
-		common.SysLog("failed to marshal setting: " + err.Error())
+		common.SysLog(fmt.Sprintf("failed to marshal setting: user_id=%d, error=%v", user.Id, err))
 		return
 	}
 	user.Setting = string(settingBytes)
+}
+
+func (user *User) AdminPermissionMap() map[string]bool {
+	permissions := map[string]bool{}
+	if user.Role >= common.RoleRootUser {
+		for _, key := range adminPermissionKeys {
+			permissions[key] = true
+		}
+		return permissions
+	}
+	if user.AdminPermissions == "" {
+		permissions = DefaultAdminPermissions()
+	} else {
+		for _, key := range adminPermissionKeys {
+			permissions[key] = false
+		}
+		var stored map[string]bool
+		if err := common.UnmarshalJsonStr(user.AdminPermissions, &stored); err == nil {
+			for _, key := range adminPermissionKeys {
+				permissions[key] = stored[key]
+			}
+		} else {
+			common.SysLog(fmt.Sprintf("failed to parse admin permissions for user %d: %v", user.Id, err))
+		}
+	}
+	if user.Role < common.RoleAdminUser && user.CanManageRedemptions {
+		permissions[AdminPermissionRedemption] = true
+		permissions[AdminPermissionAudit] = true
+	}
+	return permissions
+}
+
+func (user *User) HasAdminPermission(permission string) bool {
+	return user.AdminPermissionMap()[permission]
+}
+
+func (user *User) HasExplicitAdminPermission(permission string) bool {
+	if user.Role >= common.RoleRootUser {
+		return true
+	}
+	if user.AdminPermissions == "" {
+		return DefaultAdminPermissions()[permission]
+	}
+	var stored map[string]bool
+	if err := common.UnmarshalJsonStr(user.AdminPermissions, &stored); err != nil {
+		return false
+	}
+	return stored[permission]
+}
+
+func containsAdminPermissionKey(permission string) bool {
+	for _, key := range adminPermissionKeys {
+		if key == permission {
+			return true
+		}
+	}
+	return false
+}
+
+func NormalizeAdminPermissions(input map[string]bool) (map[string]bool, error) {
+	permissions := map[string]bool{}
+	for key := range input {
+		if !containsAdminPermissionKey(key) {
+			return nil, fmt.Errorf("unknown admin permission: %s", key)
+		}
+	}
+	for _, key := range adminPermissionKeys {
+		value, ok := input[key]
+		if !ok {
+			return nil, fmt.Errorf("missing admin permission: %s", key)
+		}
+		permissions[key] = value
+	}
+	if data, err := common.Marshal(permissions); err != nil {
+		return nil, err
+	} else {
+		var normalized map[string]bool
+		if err := common.Unmarshal(data, &normalized); err != nil {
+			return nil, err
+		}
+		return normalized, nil
+	}
+}
+
+func (user *User) SetAdminPermissions(permissions map[string]bool) error {
+	normalized, err := NormalizeAdminPermissions(permissions)
+	if err != nil {
+		return err
+	}
+	data, err := common.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	user.AdminPermissions = string(data)
+	return nil
+}
+
+func (user *User) UpdateAdminPermissionsWithDB(db *gorm.DB, permissions map[string]bool) error {
+	if err := user.SetAdminPermissions(permissions); err != nil {
+		return err
+	}
+	return db.Model(&User{}).Where("id = ?", user.Id).Update("admin_permissions", user.AdminPermissions).Error
+}
+
+func (user *User) UpdateAdminPermissions(permissions map[string]bool) error {
+	if err := user.UpdateAdminPermissionsWithDB(DB, permissions); err != nil {
+		return err
+	}
+	return updateUserCache(*user)
 }
 
 // 根据用户角色生成默认的边栏配置
@@ -153,7 +294,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	// 普通用户不包含admin区域
 
 	// 转换为JSON字符串
-	configBytes, err := json.Marshal(defaultConfig)
+	configBytes, err := common.Marshal(defaultConfig)
 	if err != nil {
 		common.SysLog("生成默认边栏配置失败: " + err.Error())
 		return ""
@@ -511,6 +652,17 @@ func (user *User) Update(updatePassword bool) error {
 }
 
 func (user *User) Edit(updatePassword bool) error {
+	if err := user.edit(DB, updatePassword); err != nil {
+		return err
+	}
+	return updateUserCache(*user)
+}
+
+func (user *User) EditWithDB(db *gorm.DB, updatePassword bool) error {
+	return user.edit(db, updatePassword)
+}
+
+func (user *User) edit(db *gorm.DB, updatePassword bool) error {
 	var err error
 	if updatePassword {
 		user.Password, err = common.Password2Hash(user.Password)
@@ -521,23 +673,26 @@ func (user *User) Edit(updatePassword bool) error {
 
 	newUser := *user
 	updates := map[string]interface{}{
-		"username":     newUser.Username,
-		"display_name": newUser.DisplayName,
-		"group":        newUser.Group,
-		"remark":                 newUser.Remark,
+		"username":              newUser.Username,
+		"display_name":          newUser.DisplayName,
+		"group":                 newUser.Group,
+		"remark":                newUser.Remark,
 		"can_manage_redemptions": newUser.CanManageRedemptions,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
 	}
-
-	DB.First(&user, user.Id)
-	if err = DB.Model(user).Updates(updates).Error; err != nil {
-		return err
+	if newUser.AdminPermissions != "" {
+		updates["admin_permissions"] = newUser.AdminPermissions
 	}
 
-	// Update cache
-	return updateUserCache(*user)
+	if err = db.First(user, user.Id).Error; err != nil {
+		return err
+	}
+	if err = db.Model(user).Updates(updates).Error; err != nil {
+		return err
+	}
+	return db.First(user, user.Id).Error
 }
 
 func (user *User) ClearBinding(bindingType string) error {

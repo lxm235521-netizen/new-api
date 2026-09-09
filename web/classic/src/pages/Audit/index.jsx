@@ -157,7 +157,7 @@ const Audit = () => {
   return (
     <div className='mt-[60px] px-2'>
       <div className='flex items-center justify-between mb-3'>
-        <Title heading={4} className='m-0'>{t('管理员审计')}</Title>
+        <Title heading={4} className='m-0'>{t('兑换码管理')}</Title>
         <Space>
           <Button disabled={selectedRows.length === 0} onClick={() => copyKeys(selectedRows)}>{t('复制所选兑换码')}</Button>
           <Button type='danger' disabled={selectedRows.length === 0} onClick={() => deleteRows(selectedRows)}>{t('删除所选')}</Button>

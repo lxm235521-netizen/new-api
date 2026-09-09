@@ -16,87 +16,109 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react';
-import { API } from '../../helpers';
+import { useState, useEffect, useCallback } from 'react';
+import { API } from '../../helpers/api';
 
-/**
- * 用户权限钩子 - 从后端获取用户权限，替代前端角色判断
- * 确保权限控制的安全性，防止前端绕过
- */
+let permissionsCache = null;
+let permissionsRequest = null;
+
+const fetchPermissions = async () => {
+  if (permissionsCache) return permissionsCache;
+  if (!permissionsRequest) {
+    permissionsRequest = API.get('/api/user/self')
+      .then((res) => {
+        if (!res.data.success) {
+          throw new Error(res.data.message || '获取权限失败');
+        }
+        const userData = res.data.data;
+        permissionsCache = {
+          permissions: {
+            ...(userData.permissions || {}),
+            admin_permissions: userData.admin_permissions || {},
+          },
+          role: userData.role,
+          canManageRedemptions: userData.can_manage_redemptions === true,
+        };
+        return permissionsCache;
+      })
+      .finally(() => {
+        permissionsRequest = null;
+      });
+  }
+  return permissionsRequest;
+};
+
+export const invalidateUserPermissions = () => {
+  permissionsCache = null;
+};
+
 export const useUserPermissions = () => {
-  const [permissions, setPermissions] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [state, setState] = useState({
+    permissions: permissionsCache?.permissions || null,
+    role: permissionsCache?.role || null,
+    canManageRedemptions: permissionsCache?.canManageRedemptions || false,
+    loading: !permissionsCache,
+    error: null,
+  });
 
-  // 加载用户权限（从用户信息接口获取）
-  const loadPermissions = async () => {
+  const loadPermissions = useCallback(async () => {
+    setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      setLoading(true);
-      setError(null);
-      const res = await API.get('/api/user/self');
-      if (res.data.success) {
-        const userPermissions = res.data.data.permissions;
-        setPermissions(userPermissions);
-        console.log('用户权限加载成功:', userPermissions);
-      } else {
-        setError(res.data.message || '获取权限失败');
-        console.error('获取权限失败:', res.data.message);
-      }
+      const data = await fetchPermissions();
+      setState({ ...data, loading: false, error: null });
+      return data;
     } catch (error) {
-      setError('网络错误，请重试');
-      console.error('加载用户权限异常:', error);
-    } finally {
-      setLoading(false);
+      setState((current) => ({
+        ...current,
+        loading: false,
+        error: error.message || '网络错误，请重试',
+      }));
+      throw error;
     }
-  };
-
-  useEffect(() => {
-    loadPermissions();
   }, []);
 
-  // 检查是否有边栏设置权限
-  const hasSidebarSettingsPermission = () => {
-    return permissions?.sidebar_settings === true;
-  };
+  useEffect(() => {
+    if (permissionsCache) {
+      setState({ ...permissionsCache, loading: false, error: null });
+      return;
+    }
+    loadPermissions().catch(() => {});
+  }, [loadPermissions]);
 
-  // 检查是否允许访问特定的边栏区域
+  const hasAdminPermission = (permission) =>
+    state.permissions?.admin_permissions?.[permission] === true;
+
+  const isRoot = () => state.role >= 100;
+
+  const hasSidebarSettingsPermission = () =>
+    state.permissions?.sidebar_settings === true;
+
   const isSidebarSectionAllowed = (sectionKey) => {
-    if (!permissions?.sidebar_modules) return true;
-    const sectionPerms = permissions.sidebar_modules[sectionKey];
+    if (!state.permissions?.sidebar_modules) return true;
+    const sectionPerms = state.permissions.sidebar_modules[sectionKey];
     return sectionPerms !== false;
   };
 
-  // 检查是否允许访问特定的边栏模块
   const isSidebarModuleAllowed = (sectionKey, moduleKey) => {
-    if (!permissions?.sidebar_modules) return true;
-    const sectionPerms = permissions.sidebar_modules[sectionKey];
-
-    // 如果整个区域被禁用
+    if (!state.permissions?.sidebar_modules) return true;
+    const sectionPerms = state.permissions.sidebar_modules[sectionKey];
     if (sectionPerms === false) return false;
-
-    // 如果区域存在但模块被禁用
     if (sectionPerms && sectionPerms[moduleKey] === false) return false;
-
     return true;
   };
 
-  // 获取允许的边栏区域列表
   const getAllowedSidebarSections = () => {
-    if (!permissions?.sidebar_modules) return [];
-
-    return Object.keys(permissions.sidebar_modules).filter((sectionKey) =>
+    if (!state.permissions?.sidebar_modules) return [];
+    return Object.keys(state.permissions.sidebar_modules).filter((sectionKey) =>
       isSidebarSectionAllowed(sectionKey),
     );
   };
 
-  // 获取特定区域允许的模块列表
   const getAllowedSidebarModules = (sectionKey) => {
-    if (!permissions?.sidebar_modules) return [];
-    const sectionPerms = permissions.sidebar_modules[sectionKey];
-
+    if (!state.permissions?.sidebar_modules) return [];
+    const sectionPerms = state.permissions.sidebar_modules[sectionKey];
     if (sectionPerms === false) return [];
     if (!sectionPerms || typeof sectionPerms !== 'object') return [];
-
     return Object.keys(sectionPerms).filter(
       (moduleKey) =>
         moduleKey !== 'enabled' && sectionPerms[moduleKey] === true,
@@ -104,10 +126,14 @@ export const useUserPermissions = () => {
   };
 
   return {
-    permissions,
-    loading,
-    error,
+    permissions: state.permissions,
+    role: state.role,
+    loading: state.loading,
+    error: state.error,
     loadPermissions,
+    hasAdminPermission,
+    isRoot,
+    canManageRedemptions: state.canManageRedemptions,
     hasSidebarSettingsPermission,
     isSidebarSectionAllowed,
     isSidebarModuleAllowed,

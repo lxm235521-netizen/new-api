@@ -192,20 +192,64 @@ func AdminAuth() func(c *gin.Context) {
 	}
 }
 
+func AdminPermissionAuth(permission string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelperWithCheck(c, common.RoleAdminUser, func(c *gin.Context) bool {
+			user, err := model.GetUserById(c.GetInt("id"), false)
+			return err == nil && user.HasAdminPermission(permission)
+		})
+	}
+}
+
+func AdminAnyPermissionAuth(permissions ...string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelperWithCheck(c, common.RoleAdminUser, func(c *gin.Context) bool {
+			user, err := model.GetUserById(c.GetInt("id"), false)
+			if err != nil {
+				return false
+			}
+			for _, permission := range permissions {
+				if user.HasAdminPermission(permission) {
+					return true
+				}
+			}
+			return false
+		})
+	}
+}
+
+func PermissionManagementAuth() func(c *gin.Context) {
+	return AdminPermissionAuth(model.AdminPermissionManagement)
+}
+
 func RedemptionAuditAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelperWithCheck(c, common.RoleCommonUser, func(c *gin.Context) bool {
-			if c.GetInt("role") >= common.RoleAdminUser {
-				return true
-			}
 			user, err := model.GetUserById(c.GetInt("id"), false)
-			return err == nil && user.CanManageRedemptions
+			if err != nil {
+				return false
+			}
+			if user.Role >= common.RoleAdminUser {
+				return user.HasAdminPermission(model.AdminPermissionAudit)
+			}
+			return user.CanManageRedemptions
 		})
 	}
 }
 
 func RedemptionCreateAuth() func(c *gin.Context) {
-	return RedemptionAuditAuth()
+	return func(c *gin.Context) {
+		authHelperWithCheck(c, common.RoleCommonUser, func(c *gin.Context) bool {
+			user, err := model.GetUserById(c.GetInt("id"), false)
+			if err != nil {
+				return false
+			}
+			if user.Role >= common.RoleAdminUser {
+				return user.HasAdminPermission(model.AdminPermissionRedemption)
+			}
+			return user.CanManageRedemptions
+		})
+	}
 }
 
 func RootAuth() func(c *gin.Context) {

@@ -21,7 +21,7 @@ import React, { lazy, Suspense, useContext, useMemo } from 'react';
 import { Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Loading from './components/common/ui/Loading';
 import User from './pages/User';
-import { AuthRedirect, PrivateRoute, AdminRoute, AuditRoute } from './helpers';
+import { AuthRedirect, PrivateRoute, AdminPermissionRoute, AuditRoute } from './helpers';
 import RegisterForm from './components/auth/RegisterForm';
 import LoginForm from './components/auth/LoginForm';
 import NotFound from './pages/NotFound';
@@ -113,33 +113,33 @@ function App() {
         <Route
           path='/console/models'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='models'>
               <ModelPage />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
           path='/console/deployment'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='deployment'>
               <ModelDeploymentPage />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
           path='/console/subscription'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='subscription'>
               <Subscription />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
           path='/console/channel'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='channel'>
               <Channel />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
@@ -161,17 +161,17 @@ function App() {
         <Route
           path='/console/redemption'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='redemption'>
               <Redemption />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
           path='/console/user'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='user'>
               <User />
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
@@ -253,11 +253,11 @@ function App() {
         <Route
           path='/console/setting'
           element={
-            <AdminRoute>
+            <AdminPermissionRoute permission='setting'>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <Setting />
               </Suspense>
-            </AdminRoute>
+            </AdminPermissionRoute>
           }
         />
         <Route
