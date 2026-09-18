@@ -22,12 +22,15 @@ package service
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"strings"
 	"sync"
+
+	"github.com/QuantumNous/new-api/common"
 
 	// 解码器：按需注册，支持常见的几种出图格式
 	_ "image/gif"
@@ -40,13 +43,33 @@ import (
 
 // 缩略图尺寸限制：太小没意义，太大等于原图
 const (
-	thumbnailMinWidth = 64
-	thumbnailMaxWidth = 1280
-	// 内存缓存上限。一页 9 张缩略图、每张几十 KB，64MB 能放很多页；
-	// 超出后按 LRU 淘汰，服务端不落盘，重启即清空。
-	thumbnailCacheBytes  = 64 << 20
+	thumbnailMinWidth    = 64
+	thumbnailMaxWidth    = 1280
 	thumbnailJPEGQuality = 85
 )
+
+// 内存缓存上限（IMAGE_THUMBNAIL_CACHE_MB，默认 64MB）。
+// 一页 9 张缩略图、每张几十 KB，64MB 能放很多页；超出后按 LRU 淘汰。
+// 不落盘、重启即清空，多节点各存各的。
+var thumbnailCacheBytes = int64(common.GetEnvOrDefault("IMAGE_THUMBNAIL_CACHE_MB", 64)) << 20
+
+// 同时生成缩略图的数量上限（IMAGE_THUMBNAIL_WORKERS，默认 4）。
+//
+// 解码一张 2~3MB 的 PNG 会瞬时占十几 MB（解码后的位图 + 缩放目标 + 编码缓冲），
+// 卡片一页 9 张同时进来能吃掉一两百 MB —— 实测 RSS 会从 21MB 冲到 132MB。
+// 缓存本身有上限，但"同时生成"没有上限，这里补上：超出的排队等。
+var thumbnailWorkers = make(chan struct{}, max(1, common.GetEnvOrDefault("IMAGE_THUMBNAIL_WORKERS", 4)))
+
+// AcquireThumbnailSlot 申请一个生成名额；ctx 取消（用户关页面）就直接放弃。
+// 返回的函数必须 defer 调用。
+func AcquireThumbnailSlot(ctx context.Context) (func(), bool) {
+	select {
+	case thumbnailWorkers <- struct{}{}:
+		return func() { <-thumbnailWorkers }, true
+	case <-ctx.Done():
+		return func() {}, false
+	}
+}
 
 // NormalizeThumbnailWidth 校验前端传来的宽度；返回 0 表示不生成缩略图（按原图返回）
 func NormalizeThumbnailWidth(width int) int {
@@ -141,7 +164,7 @@ var thumbnailCache = struct {
 	sync.Mutex
 	items map[string]*list.Element
 	order *list.List
-	bytes int
+	bytes int64
 }{
 	items: make(map[string]*list.Element),
 	order: list.New(),
@@ -166,7 +189,7 @@ func PutImageThumbnail(key string, body []byte, contentType string) {
 	if key == "" || len(body) == 0 {
 		return
 	}
-	if len(body) > thumbnailCacheBytes {
+	if int64(len(body)) > thumbnailCacheBytes {
 		return
 	}
 
@@ -175,7 +198,7 @@ func PutImageThumbnail(key string, body []byte, contentType string) {
 
 	if element, ok := thumbnailCache.items[key]; ok {
 		entry := element.Value.(*thumbnailEntry)
-		thumbnailCache.bytes += len(body) - len(entry.body)
+		thumbnailCache.bytes += int64(len(body) - len(entry.body))
 		entry.body = body
 		entry.contentType = contentType
 		thumbnailCache.order.MoveToFront(element)
@@ -186,7 +209,7 @@ func PutImageThumbnail(key string, body []byte, contentType string) {
 			contentType: contentType,
 		})
 		thumbnailCache.items[key] = element
-		thumbnailCache.bytes += len(body)
+		thumbnailCache.bytes += int64(len(body))
 	}
 
 	for thumbnailCache.bytes > thumbnailCacheBytes {
@@ -197,12 +220,12 @@ func PutImageThumbnail(key string, body []byte, contentType string) {
 		thumbnailCache.order.Remove(oldest)
 		entry := oldest.Value.(*thumbnailEntry)
 		delete(thumbnailCache.items, entry.key)
-		thumbnailCache.bytes -= len(entry.body)
+		thumbnailCache.bytes -= int64(len(entry.body))
 	}
 }
 
 // ThumbnailCacheStats 供排查用（当前缓存条数与占用）
-func ThumbnailCacheStats() (int, int) {
+func ThumbnailCacheStats() (int, int64) {
 	thumbnailCache.Lock()
 	defer thumbnailCache.Unlock()
 	return len(thumbnailCache.items), thumbnailCache.bytes

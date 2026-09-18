@@ -315,6 +315,20 @@ func proxyImageThumbnail(c *gin.Context, task *model.Task, sourceURL string, wid
 		return
 	}
 
+	// 生成一张缩略图瞬时要用十几 MB（解码位图 + 缩放目标 + 编码缓冲），
+	// 这里限流；用户关掉页面就直接放弃，不再白跑
+	release, acquired := service.AcquireThumbnailSlot(ctx)
+	if !acquired {
+		return
+	}
+	defer release()
+
+	// 排队期间可能已经被别的请求填好了，再查一次
+	if body, contentType, ok := service.GetImageThumbnail(cacheKey); ok {
+		writeThumbnailResponse(c, body, contentType, true)
+		return
+	}
+
 	raw, contentType, err := fetchImageBytes(ctx, sourceURL)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("Failed to fetch image for task %s: %s", task.TaskID, err.Error()))

@@ -49,7 +49,11 @@ const imageAsyncMaxDuration = 10 * time.Minute
 // TaskPlaceholderContextKey 值非空表示「任务行已经落过占位行，中继结束时是补全而不是插入」
 const TaskPlaceholderContextKey = "task_placeholder_id"
 
-// imageAsyncMaxBodyMB 后台复制请求体时的上限（和网关的请求体上限保持一致）
+// imageAsyncMaxBodyMB 后台复制请求体时的上限。
+//
+// 异步执行必须自己留一份请求体（原请求结束时 body storage 会被关闭），所以这个副本
+// 的大小≈每个在跑的图片任务占多少内存。默认 64MB：够容纳几十兆的 base64 参考图，
+// 又低于网关的 MAX_REQUEST_BODY_MB（默认 128MB）；真的超了会退回同步执行。
 const imageAsyncMaxBodyMB = 64
 
 // imageRequestBody 是异步分发需要从请求体里读出来的信息
