@@ -37,6 +37,7 @@ import {
   formatDateTime,
   formatElapsed,
   resolvePlaybackUrl,
+  resolveThumbUrl,
   simplifyRatio,
   taskCostQuota,
 } from '../utils';
@@ -69,6 +70,8 @@ function TaskThumbnail({ task, onMediaInfo }) {
 
   const cover = task.thumbnailUrl || '';
   const src = resolvePlaybackUrl(task);
+  // 卡片上的图片用缩略图，别回 2~3MB 的原图
+  const thumbSrc = resolveThumbUrl(task);
   const canPreview =
     Boolean(src) &&
     task.kind === 'video' &&
@@ -94,10 +97,17 @@ function TaskThumbnail({ task, onMediaInfo }) {
   }, [canPreview, inView]);
 
   // 图片任务：直接展示生成结果（拿不到结果时退回参考图/占位）
-  if (task.kind === 'image' && src) {
+  if (task.kind === 'image' && thumbSrc) {
     return (
       <div className='wb-card__holder' ref={holderRef}>
-        <img src={src} alt='' loading='lazy' />
+        <img
+          src={thumbSrc}
+          alt=''
+          loading='lazy'
+          decoding='async'
+          onError={() => setPreviewFailed(true)}
+        />
+        {previewFailed && <div className='wb-card__placeholder' />}
       </div>
     );
   }
@@ -107,7 +117,7 @@ function TaskThumbnail({ task, onMediaInfo }) {
   return (
     <div className='wb-card__holder' ref={holderRef}>
       {cover ? (
-        <img src={cover} alt='' loading='lazy' />
+        <img src={cover} alt='' loading='lazy' decoding='async' />
       ) : (
         <div className='wb-card__placeholder'>
           <KindIcon size={22} aria-hidden='true' />

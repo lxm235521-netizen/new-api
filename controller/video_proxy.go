@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -148,6 +149,16 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
+	// 图片缩略图：/v1/images/tasks/{id}/content?w=480
+	// 卡片上只有一两百像素宽，回原图（2~3MB）首屏要白等好几秒；这里线上解码缩放，
+	// 结果进内存缓存，前端仍然走同一个接口，不用改图片地址。
+	if isImageTask(task) {
+		if width := service.NormalizeThumbnailWidth(parseQueryInt(c.Query("w"))); width > 0 {
+			proxyImageThumbnail(c, task, videoURL, width)
+			return
+		}
+	}
+
 	if strings.HasPrefix(videoURL, "data:") {
 		if err := writeVideoDataURL(c, videoURL); err != nil {
 			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to decode video data URL for task %s: %s", taskID, err.Error()))
@@ -277,6 +288,131 @@ func VideoProxy(c *gin.Context) {
 	if _, err = io.Copy(c.Writer, streamBody); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
 	}
+}
+
+// parseQueryInt 宽松解析查询参数里的整数，解析不了当 0
+func parseQueryInt(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return parsed
+}
+
+// proxyImageThumbnail 生成/命中缩略图并写回响应。
+//
+// 任何一步失败都退回原图（缩放只是优化，不能因此让用户看不到图）。
+func proxyImageThumbnail(c *gin.Context, task *model.Task, sourceURL string, width int) {
+	ctx := c.Request.Context()
+	cacheKey := fmt.Sprintf("%s@%d", task.TaskID, width)
+
+	if body, contentType, ok := service.GetImageThumbnail(cacheKey); ok {
+		writeThumbnailResponse(c, body, contentType, true)
+		return
+	}
+
+	raw, contentType, err := fetchImageBytes(ctx, sourceURL)
+	if err != nil {
+		logger.LogError(ctx, fmt.Sprintf("Failed to fetch image for task %s: %s", task.TaskID, err.Error()))
+		videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to fetch image content")
+		return
+	}
+
+	thumb, thumbType, err := service.BuildImageThumbnail(raw, contentType, width)
+	if err != nil {
+		// 格式不支持（例如 SVG）或解码失败：直接给原图
+		logger.LogError(ctx, fmt.Sprintf("Failed to build thumbnail for task %s: %s", task.TaskID, err.Error()))
+		writeThumbnailResponse(c, raw, contentType, false)
+		return
+	}
+
+	service.PutImageThumbnail(cacheKey, thumb, thumbType)
+	writeThumbnailResponse(c, thumb, thumbType, false)
+}
+
+func writeThumbnailResponse(c *gin.Context, body []byte, contentType string, fromCache bool) {
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	c.Writer.Header().Set("Content-Type", contentType)
+	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	// 缩略图按任务固定，缓存一周；多节点各存各的，不落盘
+	c.Writer.Header().Set("Cache-Control", "public, max-age=604800")
+	if fromCache {
+		c.Writer.Header().Set("X-Thumbnail-Cache", "hit")
+	}
+	c.Writer.WriteHeader(http.StatusOK)
+	if _, err := c.Writer.Write(body); err != nil {
+		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to write thumbnail: %s", err.Error()))
+	}
+}
+
+// fetchImageBytes 取原图字节：支持 data: URL 和 http(s)
+func fetchImageBytes(ctx context.Context, sourceURL string) ([]byte, string, error) {
+	if strings.HasPrefix(sourceURL, "data:") {
+		body, contentType, err := decodeImageDataURL(sourceURL)
+		if err != nil {
+			return nil, "", err
+		}
+		return body, contentType, nil
+	}
+
+	fetchSetting := system_setting.GetFetchSetting()
+	if err := common.ValidateURLWithFetchSetting(sourceURL, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
+		return nil, "", fmt.Errorf("url blocked: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("upstream status %d", resp.StatusCode)
+	}
+
+	// 原图上限 32MB，防止异常地址把内存吃满
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if idx := strings.Index(contentType, ";"); idx >= 0 {
+		contentType = contentType[:idx]
+	}
+	return body, strings.TrimSpace(contentType), nil
+}
+
+// decodeImageDataURL 解析 data:image/xxx;base64,....
+func decodeImageDataURL(dataURL string) ([]byte, string, error) {
+	parts := strings.SplitN(dataURL, ",", 2)
+	if len(parts) != 2 {
+		return nil, "", fmt.Errorf("invalid data url")
+	}
+	header := parts[0]
+	if !strings.Contains(header, ";base64") {
+		return nil, "", fmt.Errorf("unsupported data url")
+	}
+	mimeType := strings.TrimSuffix(strings.TrimPrefix(header, "data:"), ";base64")
+	body, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		body, err = base64.RawStdEncoding.DecodeString(parts[1])
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	return body, mimeType, nil
 }
 
 func writeVideoDataURL(c *gin.Context, dataURL string) error {

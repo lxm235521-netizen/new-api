@@ -369,6 +369,19 @@ export function resolvePlaybackUrl(task) {
   return url;
 }
 
+/**
+ * 卡片预览用的缩略图地址。
+ *
+ * 生成出来的原图有 2~3MB，而卡片上只显示一两百像素宽 —— 直接回原图，首屏要白等
+ * 好几秒。图片任务因此带 ?w=480（服务端解码缩放 + 内存缓存）；视频任务没有缩略图
+ * 接口，保持原样。详情大图、下载仍用 resolvePlaybackUrl 取原图。
+ */
+export function resolveThumbUrl(task) {
+  const url = resolvePlaybackUrl(task);
+  if (!url || task?.kind !== 'image') return url;
+  return `${url}${url.includes('?') ? '&' : '?'}w=480`;
+}
+
 /** 时间戳（毫秒）-> 本地时间文案 */
 export function formatDateTime(timestamp) {
   if (!timestamp) return '-';
