@@ -29,8 +29,8 @@ For commercial licensing, please contact support@quantumnous.com
 // 历史任务分页
 // ============================================================================
 
-/** 每页 12 条（4 列 × 3 行），分页由后端 /api/task/self 完成 */
-export const HISTORY_PAGE_SIZE = 12;
+/** 每页 9 条（3 列 × 3 行，行高均分页面，卡片填满不留白），分页由后端 /api/task/self 完成 */
+export const HISTORY_PAGE_SIZE = 9;
 
 // ============================================================================
 // 任务状态展示

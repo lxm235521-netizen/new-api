@@ -180,17 +180,15 @@ body[theme-mode='dark'] .wb-root {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  align-content: start;
-  /* 行高必须由内容决定：
-     .wb-grid 是固定高度的滚动容器，行高是 auto 时浏览器会把所有行
-     压缩到容器高度里，卡片被 overflow:hidden 裁成一条 40px 的横条 ——
-     缩略图和提示词全被切掉。 */
-  grid-auto-rows: max-content;
-  gap: 8px;
-  padding: 10px 14px 12px;
-  /* 横向卡片（左媒体 + 右信息）：一页 12 条按 3 列 × 4 行排。
-     列数写死而不是 auto-fill —— 面板可用宽度只有约 1000~1170px，
-     auto-fill 会在 1600 宽的窗口上掉到 2 列，卡片被拉得很空。
+  /* 一页 9 条按 3 列 × 3 行排，行高用 1fr 均分可用高度 —— 卡片随之变大填满页面，
+     不留一块空白。行高必须显式给（不能是 auto/max-content）：容器是固定高度的
+     滚动容器，auto 行高会把所有行压扁，卡片被裁成一条横条。 */
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+  /* 横向卡片（左媒体 + 右信息）。列数写死而不是 auto-fill：面板可用宽度只有
+     约 1000~1170px，auto-fill 会在 1600 宽的窗口上掉到 2 列，卡片被拉得很空。
      窄屏在文件末尾逐级降列。 */
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -209,7 +207,8 @@ body[theme-mode='dark'] .wb-root {
 /* ------------------------------------------------------------- 任务卡片 */
 
 /* 横向卡片：左边媒体（视频帧/参考图），右边信息。
-   媒体固定宽度 + cover 裁切，竖版 9:16 的成片正好铺满，不会留黑边。 */
+   卡片高度由网格行高给定（3 行均分页面），所以这里只留一个下限兜底。
+   媒体固定比例宽度 + cover 裁切，竖版 9:16 的成片正好铺满，不会留黑边。 */
 .wb-card {
   display: flex;
   align-items: stretch;
@@ -412,6 +411,9 @@ body[theme-mode='dark'] .wb-root {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  /* 卡片高度由 3 行网格均分，比原来高：多出来的空间留给媒体预览，
+     标签行贴到底部，中间留白而不是把提示词盒撑得很空 */
+  margin-top: auto;
 }
 
 /* 卡片里空间紧，标签内距比右侧面板再收一点，尽量一行放得下 */
@@ -1080,6 +1082,9 @@ body[theme-mode='dark'] .wb-root {
 
   .wb-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* 两列时 9 条会排成 5 行，不再强行均分容器高度，改为按内容滚动 */
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
   }
 }
 

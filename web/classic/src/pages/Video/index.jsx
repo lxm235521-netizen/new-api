@@ -179,12 +179,13 @@ const VideoWorkbench = () => {
   }, []);
 
   // 历史任务：取后端落库的记录（刷新后仍在）。
-  // 分页与状态筛选都在后端做，这样分页器的 total 与列表始终一致。
+  // 分页、状态筛选、产出类型都在后端做，这样分页器的 total 与列表始终一致。
   const refreshHistory = useCallback(async () => {
     try {
       const { items, total } = await getUserTasks({
         p: page,
         page_size: HISTORY_PAGE_SIZE,
+        mediaFilter,
         ...(statusFilter === 'all' ? {} : { status: statusFilter }),
       });
       setTotalTasks(total);
@@ -211,13 +212,13 @@ const VideoWorkbench = () => {
       showError(error?.message || t('加载历史任务失败'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, page, statusFilter]);
+  }, [models, page, statusFilter, mediaFilter]);
 
   useEffect(() => {
     if (models.length === 0 && loading) return;
     refreshHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, models.length, page, statusFilter]);
+  }, [loading, models.length, page, statusFilter, mediaFilter]);
 
   // 轮询未结束的任务；终态不轮询。
   // 图片任务用自己的查询接口（/v1/images/tasks/:id），它没有上游任务可查。

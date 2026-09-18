@@ -186,12 +186,24 @@ export async function fetchVideoTask(tokenKey, taskId) {
 /**
  * 历史任务（控制台接口，落库记录）。
  *
- * 只取视频/图片任务列表，分页交给调用方。
+ * 产出类型必须交给服务端过滤，不能只在前端筛：分页是服务端做的，
+ * 前端筛会出现「这一页 9 条里只有 1 条视频」这种看着像丢数据的情况，
+ * 总数（共 N 条）也对不上。
+ *
+ * 图片任务落库时 platform=image；视频任务的 platform 是渠道类型（"1" 之类），
+ * 所以视频这一侧用 exclude_platform=image 表达，而不是 platform=video。
  */
 export async function getUserTasks(params = {}) {
-  const res = await API.get('/api/task/self', {
-    params: { p: 1, page_size: 50, ...params },
-  });
+  const { mediaFilter, ...rest } = params;
+  const query = { p: 1, page_size: 50, ...rest };
+
+  if (mediaFilter === 'image') {
+    query.platform = 'image';
+  } else if (mediaFilter === 'video') {
+    query.exclude_platform = 'image';
+  }
+
+  const res = await API.get('/api/task/self', { params: query });
   const { success, message, data } = res.data;
   if (!success) {
     throw new Error(message || '加载历史任务失败');
