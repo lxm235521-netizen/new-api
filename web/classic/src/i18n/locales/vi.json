@@ -4359,6 +4359,10 @@
     "参考 {{count}}": "Tham chiếu {{count}}",
     "刚提交": "Vừa gửi",
     "图片并发/用户": "Số ảnh song song mỗi người dùng",
-    "当前不限并发": "Không giới hạn song song"
+    "当前不限并发": "Không giới hạn song song",
+    "推理模型": "Mô hình suy luận",
+    "历史任务": "Lịch sử tác vụ",
+    "使用提示词和参考素材生成图片": "Tạo ảnh từ câu lệnh và tư liệu tham chiếu",
+    "与大模型在线对话，内容由管理员在「在线使用」中配置": "Trò chuyện trực tuyến với mô hình; nội dung do quản trị viên cấu hình"
   }
 }

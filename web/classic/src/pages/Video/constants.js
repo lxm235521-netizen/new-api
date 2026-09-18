@@ -57,13 +57,20 @@ export const STATUS_FILTER_OPTIONS = [
 ];
 
 // ============================================================================
-// 产出类型筛选
+// 产出类型（工作台的三个 tab）
 // ============================================================================
 
+/**
+ * 工作台顶部的三个 tab。
+ *
+ * 视频 / 图片各自只展示对应分组的模型；推理模型那一栏直接嵌「在线使用」页面
+ * （内容由后台配置，通常是自建的对话前端）。
+ * 故意不提供「全部」：三种产出混在一起既选不对模型，也没法共用一套参数。
+ */
 export const MEDIA_FILTER_OPTIONS = [
-  { labelKey: '全部产出', value: 'all' },
-  { labelKey: '图片', value: 'image' },
   { labelKey: '视频', value: 'video' },
+  { labelKey: '图片', value: 'image' },
+  { labelKey: '推理模型', value: 'reasoner' },
 ];
 
 export const MEDIA_KIND_LABELS = {

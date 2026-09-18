@@ -3981,6 +3981,10 @@
     "耗时": "Took",
     "生成时间": "Created",
     "图片并发/用户": "Image concurrency / user",
-    "当前不限并发": "Concurrency unlimited"
+    "当前不限并发": "Concurrency unlimited",
+    "推理模型": "Reasoning models",
+    "历史任务": "Task history",
+    "使用提示词和参考素材生成图片": "Generate images from prompts and reference assets",
+    "与大模型在线对话，内容由管理员在「在线使用」中配置": "Chat with models online; the content is configured by the administrator"
   }
 }

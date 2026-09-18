@@ -39,7 +39,13 @@ function detectIsUrl(content) {
   }
 }
 
-const OnlineUse = () => {
+/**
+ * 「在线使用」页面：内容由后台配置（Markdown / HTML / 外链），
+ * 外链与 HTML 都用 iframe 承载，避免污染后台自己的样式与脚本环境。
+ *
+ * embedded = true 时不带自己的整页定位与顶部留白，供工作台的「推理模型」tab 内嵌使用。
+ */
+const OnlineUse = ({ embedded = false }) => {
   const { t } = useTranslation();
   const [content, setContent] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -72,9 +78,14 @@ const OnlineUse = () => {
     return <Loading />;
   }
 
+  // 内嵌时铺满父容器；独立成页时占满内容区（顶部留出应用头栏高度）
+  const shellClass = embedded
+    ? 'wb-embed'
+    : 'classic-page-fill flex flex-col overflow-x-hidden w-full pt-[60px]';
+
   if (!content) {
     return (
-      <div className='classic-page-fill flex flex-col pt-[60px] px-2'>
+      <div className={embedded ? 'wb-embed' : shellClass}>
         <div className='flex flex-1 justify-center items-center p-8'>
           <p>{t('暂无内容')}</p>
         </div>
@@ -86,7 +97,7 @@ const OnlineUse = () => {
   const isHtml = !isUrl && detectIsHtml(content);
 
   return (
-    <div className='classic-page-fill flex flex-col overflow-x-hidden w-full pt-[60px]'>
+    <div className={shellClass}>
       {isUrl ? (
         <iframe
           src={content}
@@ -102,10 +113,7 @@ const OnlineUse = () => {
           sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
         />
       ) : (
-        <div
-          className='px-2'
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+        <div className='px-2' dangerouslySetInnerHTML={{ __html: content }} />
       )}
     </div>
   );

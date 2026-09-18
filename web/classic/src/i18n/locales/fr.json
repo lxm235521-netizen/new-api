@@ -3831,6 +3831,10 @@
     "耗时": "Durée",
     "生成时间": "Créé",
     "图片并发/用户": "Concurrence image / utilisateur",
-    "当前不限并发": "Concurrence illimitée"
+    "当前不限并发": "Concurrence illimitée",
+    "推理模型": "Modèles de raisonnement",
+    "历史任务": "Historique des tâches",
+    "使用提示词和参考素材生成图片": "Générez des images à partir de prompts et de références",
+    "与大模型在线对话，内容由管理员在「在线使用」中配置": "Discutez en ligne avec les modèles ; le contenu est configuré par l'administrateur"
   }
 }

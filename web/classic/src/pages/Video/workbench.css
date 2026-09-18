@@ -69,6 +69,36 @@ body[theme-mode='dark'] .wb-root {
   color: var(--semi-color-text-2);
 }
 
+/* 产出类型切换（视频 / 图片 / 推理模型）：紧跟在标题右边 */
+.wb-modes {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 推理模型内嵌在线使用页面 */
+.wb-body--embed {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+
+.wb-embed {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.wb-embed iframe {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: none;
+}
+
 .wb-topbar__actions {
   display: flex;
   align-items: center;

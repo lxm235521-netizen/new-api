@@ -39,7 +39,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, Select } from '@douyinfe/semi-ui';
+import { Button, Select, Tabs } from '@douyinfe/semi-ui';
 import { Clapperboard, KeyRound, Wallet } from 'lucide-react';
 import { UserContext } from '../../context/User';
 import {
@@ -50,6 +50,7 @@ import {
   showError,
   showSuccess,
 } from '../../helpers';
+import OnlineUse from '../OnlineUse';
 import {
   fetchImageTask,
   fetchVideoTask,
@@ -62,7 +63,11 @@ import HistoryPanel from './components/HistoryPanel';
 import ModelPanel from './components/ModelPanel';
 import SubmitBar from './components/SubmitBar';
 import TaskDetail from './components/TaskDetail';
-import { BILLING_MODE_LABELS, HISTORY_PAGE_SIZE } from './constants';
+import {
+  BILLING_MODE_LABELS,
+  HISTORY_PAGE_SIZE,
+  MEDIA_FILTER_OPTIONS,
+} from './constants';
 import { useWorkbenchToken } from './hooks/useWorkbenchToken';
 import { buildWorkbenchModels } from './modelCatalog';
 import {
@@ -93,6 +98,15 @@ function createForm(model) {
 
 let localTaskSeq = 0;
 
+/** 顶栏副标题：跟着当前产出类型走，别在图片/推理模型下还写着「生成视频」 */
+const SUBTITLE_KEYS = {
+  video: '使用提示词和参考素材生成视频',
+  image: '使用提示词和参考素材生成图片',
+  reasoner: '与大模型在线对话，内容由管理员在「在线使用」中配置',
+};
+
+const TabPane = Tabs.TabPane;
+
 const VideoWorkbench = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -111,7 +125,7 @@ const VideoWorkbench = () => {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(null);
-  const [mediaFilter, setMediaFilter] = useState('all');
+  const [mediaFilter, setMediaFilter] = useState('video');
   const [statusFilter, setStatusFilter] = useState('all');
   const [onlyCurrentModel, setOnlyCurrentModel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -293,6 +307,14 @@ const VideoWorkbench = () => {
     [models, form?.model],
   );
 
+  // 当前 tab 允许的模型：视频只能选视频模型，图片只能选图片模型
+  const modeModels = useMemo(
+    () => models.filter((item) => item.group === mediaFilter),
+    [models, mediaFilter],
+  );
+
+  const isReasonerMode = mediaFilter === 'reasoner';
+
   const visibleTasks = useMemo(
     () =>
       filterTasks(tasks, {
@@ -448,7 +470,26 @@ const VideoWorkbench = () => {
   };
 
   const quota = balanceQuota ?? userState?.user?.quota ?? 0;
-  const configured = models.length > 0;
+
+  /**
+   * 切换产出类型（视频 / 图片 / 推理模型）。
+   *
+   * 视频和图片各自只展示自己那组模型，切过去时把表单的模型换成该组第一个；
+   * 推理模型是嵌进来的「在线使用」页面，没有本地模型表单。
+   */
+  const handleModeChange = (mode) => {
+    if (mode === mediaFilter) return;
+    setMediaFilter(mode);
+    setPage(1);
+    if (mode === 'reasoner') return;
+
+    const groupModels = models.filter((item) => item.group === mode);
+    if (groupModels.length > 0) {
+      setForm((prev) =>
+        prev ? { ...prev, model: groupModels[0].value } : prev,
+      );
+    }
+  };
 
   return (
     <div className='wb-root'>
@@ -456,10 +497,25 @@ const VideoWorkbench = () => {
       <div className='wb-topbar'>
         <div className='min-w-0'>
           <div className='wb-topbar__title'>{t('工作台')}</div>
-          <div className='wb-topbar__sub'>
-            {t('使用提示词和参考素材生成视频')}
-          </div>
+          <div className='wb-topbar__sub'>{t(SUBTITLE_KEYS[mediaFilter])}</div>
         </div>
+
+        {/* 产出类型：视频 / 图片 / 推理模型（推理模型 = 嵌进来的在线使用页） */}
+        <Tabs
+          type='button'
+          size='small'
+          activeKey={mediaFilter}
+          onChange={handleModeChange}
+          className='wb-modes'
+        >
+          {MEDIA_FILTER_OPTIONS.map((option) => (
+            <TabPane
+              key={option.value}
+              itemKey={option.value}
+              tab={t(option.labelKey)}
+            />
+          ))}
+        </Tabs>
 
         <div className='wb-topbar__actions'>
           {/* 密钥选择：进入工作台先选密钥，使用中可随时切换 */}
@@ -506,76 +562,82 @@ const VideoWorkbench = () => {
         </div>
       </div>
 
-      {/* 两栏 */}
-      <div className='wb-body'>
-        <HistoryPanel
-          tasks={visibleTasks}
-          total={totalTasks || tasks.length}
-          page={page}
-          pageSize={HISTORY_PAGE_SIZE}
-          onPageChange={setPage}
-          mediaFilter={mediaFilter}
-          statusFilter={statusFilter}
-          onlyCurrentModel={onlyCurrentModel}
-          onMediaFilterChange={setMediaFilter}
-          onStatusFilterChange={(value) => {
-            setStatusFilter(value);
-            // 换筛选条件必须回到第一页，否则可能停在一个空页上
-            setPage(1);
-          }}
-          onOnlyCurrentModelChange={setOnlyCurrentModel}
-          onRetryTask={loadTaskConfig}
-          onOpenTask={setDetailTask}
-        />
-
-        <div className='wb-side'>
-          <div className='wb-side__scroll'>
-            {!loading && !configured ? (
-              <div className='wb-empty'>
-                <span className='wb-empty__icon'>
-                  <Clapperboard size={22} aria-hidden='true' />
-                </span>
-                <span className='wb-empty__title'>
-                  {t('管理员尚未配置工作台模型')}
-                </span>
-                {isAdmin() && (
-                  <Button
-                    theme='light'
-                    type='primary'
-                    size='small'
-                    onClick={() => navigate('/console/workbench')}
-                  >
-                    {t('前往工作台配置')}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              form && (
-                <ModelPanel
-                  models={models}
-                  model={model}
-                  form={form}
-                  onChange={handleFormChange}
-                  billingLabel={
-                    model
-                      ? BILLING_MODE_LABELS[effectiveBilling(model)] || ''
-                      : ''
-                  }
-                  tokenKey={token?.key || ''}
-                />
-              )
-            )}
-          </div>
-
-          <SubmitBar
-            estimatedQuota={estimatedQuota}
-            billingLabel={billingLabel}
-            disabled={submitDisabled || !configured}
-            submitting={submitting}
-            onSubmit={handleSubmit}
-          />
+      {/* 推理模型：直接嵌「在线使用」页面（iframe 或 HTML 由后台配置决定） */}
+      {isReasonerMode ? (
+        <div className='wb-body wb-body--embed'>
+          <OnlineUse embedded />
         </div>
-      </div>
+      ) : (
+        /* 两栏：左侧历史任务 + 右侧模型参数 */
+        <div className='wb-body'>
+          <HistoryPanel
+            tasks={visibleTasks}
+            total={totalTasks || tasks.length}
+            page={page}
+            pageSize={HISTORY_PAGE_SIZE}
+            onPageChange={setPage}
+            mediaFilter={mediaFilter}
+            statusFilter={statusFilter}
+            onlyCurrentModel={onlyCurrentModel}
+            onStatusFilterChange={(value) => {
+              setStatusFilter(value);
+              // 换筛选条件必须回到第一页，否则可能停在一个空页上
+              setPage(1);
+            }}
+            onOnlyCurrentModelChange={setOnlyCurrentModel}
+            onRetryTask={loadTaskConfig}
+            onOpenTask={setDetailTask}
+          />
+
+          <div className='wb-side'>
+            <div className='wb-side__scroll'>
+              {!loading && modeModels.length === 0 ? (
+                <div className='wb-empty'>
+                  <span className='wb-empty__icon'>
+                    <Clapperboard size={22} aria-hidden='true' />
+                  </span>
+                  <span className='wb-empty__title'>
+                    {t('管理员尚未配置工作台模型')}
+                  </span>
+                  {isAdmin() && (
+                    <Button
+                      theme='light'
+                      type='primary'
+                      size='small'
+                      onClick={() => navigate('/console/workbench')}
+                    >
+                      {t('前往工作台配置')}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                form && (
+                  <ModelPanel
+                    models={modeModels}
+                    model={model}
+                    form={form}
+                    onChange={handleFormChange}
+                    billingLabel={
+                      model
+                        ? BILLING_MODE_LABELS[effectiveBilling(model)] || ''
+                        : ''
+                    }
+                    tokenKey={token?.key || ''}
+                  />
+                )
+              )}
+            </div>
+
+            <SubmitBar
+              estimatedQuota={estimatedQuota}
+              billingLabel={billingLabel}
+              disabled={submitDisabled || modeModels.length === 0}
+              submitting={submitting}
+              onSubmit={handleSubmit}
+            />
+          </div>
+        </div>
+      )}
 
       <TaskDetail
         task={detailTask}
