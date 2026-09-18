@@ -19,17 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pagination, Select, Switch } from '@douyinfe/semi-ui';
+import { Pagination, Select, Switch, Tabs } from '@douyinfe/semi-ui';
 import { LayoutGrid } from 'lucide-react';
-import { STATUS_FILTER_OPTIONS } from '../constants';
+import { MEDIA_FILTER_OPTIONS, STATUS_FILTER_OPTIONS } from '../constants';
 import TaskCard from './TaskCard';
+
+const TabPane = Tabs.TabPane;
 
 /**
  * 左栏：历史任务。
  *
- * 工具栏（状态筛选、仅看当前模型、总数）+ 12 条一页的卡片网格（3 列 × 4 行）
+ * 工具栏（产出类型切换、状态筛选、仅看当前模型、总数）+ 12 条一页的卡片网格（3 列 × 4 行）
  * + 底部分页器。分页由后端完成，`total` 是后端给的总数。
- * 产出类型（视频/图片/推理模型）已提到顶栏，这里只按当前类型筛选过的数据渲染。
  */
 const HistoryPanel = ({
   tasks,
@@ -37,8 +38,10 @@ const HistoryPanel = ({
   page,
   pageSize,
   onPageChange,
+  mediaFilter,
   statusFilter,
   onlyCurrentModel,
+  onMediaFilterChange,
   onStatusFilterChange,
   onOnlyCurrentModelChange,
   onRetryTask,
@@ -57,13 +60,30 @@ const HistoryPanel = ({
         <div className='wb-toolbar__row'>
           <div className='wb-toolbar__title'>{t('历史任务')}</div>
 
-          <Select
-            value={statusFilter}
-            onChange={onStatusFilterChange}
-            optionList={statusOptions}
-            style={{ width: 132 }}
-            size='small'
-          />
+          <div className='flex flex-wrap items-center gap-2'>
+            <Tabs
+              type='button'
+              size='small'
+              activeKey={mediaFilter}
+              onChange={onMediaFilterChange}
+            >
+              {MEDIA_FILTER_OPTIONS.map((option) => (
+                <TabPane
+                  key={option.value}
+                  itemKey={option.value}
+                  tab={t(option.labelKey)}
+                />
+              ))}
+            </Tabs>
+
+            <Select
+              value={statusFilter}
+              onChange={onStatusFilterChange}
+              optionList={statusOptions}
+              style={{ width: 132 }}
+              size='small'
+            />
+          </div>
         </div>
 
         <div className='wb-toolbar__meta'>
