@@ -57,9 +57,6 @@ import (
 const (
 	TaskPlatformImage      = constant.TaskPlatform("image")
 	TaskPlatformContextKey = "task_platform"
-	// taskDataResponseLimit 任务列表里 data（上游原始响应）的长度上限：
-	// 正常响应只有几百字节，能到这个量级的都是内嵌 base64 图片，一律不外传。
-	taskDataResponseLimit = 64 << 10
 )
 
 func GetAdaptor(apiType int) channel.Adaptor {

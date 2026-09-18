@@ -3,7 +3,6 @@ package common
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strings"
 )
@@ -188,60 +187,6 @@ func isDataURLValue(v any) bool {
 // isReplaceableMediaValue 媒体地址：http(s) 或内联 data URL
 func isReplaceableMediaValue(v any) bool {
 	return isRemoteURLValue(v) || isDataURLValue(v)
-}
-
-// inlineDataURLMinBytes 超过这个长度的 data URL 就认为内联了图片/视频本体
-const inlineDataURLMinBytes = 256
-
-// RedactInlineDataURL 把一个内联 data URL 换成等长的说明文字。
-// 库里留着它没有任何价值（几 MB 的 base64），但会拖慢每一次列表查询。
-func RedactInlineDataURL(value string) string {
-	if len(value) < inlineDataURLMinBytes || !isDataURLValue(value) {
-		return value
-	}
-	mime := "application/octet-stream"
-	if idx := strings.Index(value, ";"); idx > len("data:") {
-		mime = value[len("data:"):idx]
-	}
-	return fmt.Sprintf("data:%s;base64,<inline %d bytes omitted>", mime, len(value))
-}
-
-// RedactInlineDataURLs 递归处理 JSON 里所有内联 data URL 字段
-func RedactInlineDataURLs(data json.RawMessage) json.RawMessage {
-	if len(data) == 0 {
-		return data
-	}
-	var v any
-	if err := Unmarshal(data, &v); err != nil {
-		return data
-	}
-	walkAndRedactInlineDataURLs(v)
-	result, err := Marshal(v)
-	if err != nil {
-		return data
-	}
-	return result
-}
-
-func walkAndRedactInlineDataURLs(v any) {
-	switch val := v.(type) {
-	case map[string]any:
-		for key, child := range val {
-			if s, ok := child.(string); ok {
-				val[key] = RedactInlineDataURL(s)
-				continue
-			}
-			walkAndRedactInlineDataURLs(child)
-		}
-	case []any:
-		for i := range val {
-			if s, ok := val[i].(string); ok {
-				val[i] = RedactInlineDataURL(s)
-				continue
-			}
-			walkAndRedactInlineDataURLs(val[i])
-		}
-	}
 }
 
 // JsonRawMessageToString returns JSON strings as their decoded value and other JSON values as raw text.

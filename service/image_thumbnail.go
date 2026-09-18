@@ -22,7 +22,6 @@ package service
 import (
 	"bytes"
 	"container/list"
-	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -48,28 +47,12 @@ const (
 	thumbnailJPEGQuality = 85
 )
 
-// 内存缓存上限（IMAGE_THUMBNAIL_CACHE_MB，默认 64MB）。
-// 一页 9 张缩略图、每张几十 KB，64MB 能放很多页；超出后按 LRU 淘汰。
-// 不落盘、重启即清空，多节点各存各的。
-var thumbnailCacheBytes = int64(common.GetEnvOrDefault("IMAGE_THUMBNAIL_CACHE_MB", 64)) << 20
-
-// 同时生成缩略图的数量上限（IMAGE_THUMBNAIL_WORKERS，默认 4）。
+// 内存缓存上限（IMAGE_THUMBNAIL_CACHE_MB，默认 256MB）。
 //
-// 解码一张 2~3MB 的 PNG 会瞬时占十几 MB（解码后的位图 + 缩放目标 + 编码缓冲），
-// 卡片一页 9 张同时进来能吃掉一两百 MB —— 实测 RSS 会从 21MB 冲到 132MB。
-// 缓存本身有上限，但"同时生成"没有上限，这里补上：超出的排队等。
-var thumbnailWorkers = make(chan struct{}, max(1, common.GetEnvOrDefault("IMAGE_THUMBNAIL_WORKERS", 4)))
-
-// AcquireThumbnailSlot 申请一个生成名额；ctx 取消（用户关页面）就直接放弃。
-// 返回的函数必须 defer 调用。
-func AcquireThumbnailSlot(ctx context.Context) (func(), bool) {
-	select {
-	case thumbnailWorkers <- struct{}{}:
-		return func() { <-thumbnailWorkers }, true
-	case <-ctx.Done():
-		return func() {}, false
-	}
-}
+// 这不是「限流」，只是给缓存定一个回收边界：命中就直接返回，超了按 LRU 丢最旧的。
+// 定得大一些，常访问的图一直留在内存里，不用反复回源解码。不落盘、重启即清空，
+// 多节点各存各的。
+var thumbnailCacheBytes = int64(common.GetEnvOrDefault("IMAGE_THUMBNAIL_CACHE_MB", 256)) << 20
 
 // NormalizeThumbnailWidth 校验前端传来的宽度；返回 0 表示不生成缩略图（按原图返回）
 func NormalizeThumbnailWidth(width int) int {

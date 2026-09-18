@@ -81,14 +81,14 @@ type WorkbenchModel struct {
 type WorkbenchSetting struct {
 	Models []WorkbenchModel `json:"models"`
 	// AsyncImagePerUser 异步图片生成时「单个用户同时可跑几张」。
-	// 默认 2；设为 0 表示不限（此时并发完全交给上游排队）。
-	// 它挡的是「一个用户开一堆标签页把上游占满」，不影响外部 API 接入。
+	// **默认 0 = 不限制**（用户多的时候不该被卡住）；确实要给个别用户限流时再调大。
+	// 只影响工作台的异步图片任务，不影响外部 API 的同步调用。
 	AsyncImagePerUser int `json:"async_image_per_user"`
 }
 
 var workbenchSetting = WorkbenchSetting{
 	Models:            []WorkbenchModel{},
-	AsyncImagePerUser: 2,
+	AsyncImagePerUser: 0,
 }
 
 func init() {

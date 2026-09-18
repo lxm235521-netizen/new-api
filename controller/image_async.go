@@ -169,7 +169,7 @@ func RelayImageGeneration(c *gin.Context) {
 
 	limit := operation_setting.GetWorkbenchSetting().AsyncImagePerUser
 	gopool.Go(func() {
-		// 每用户并发闸门：超出上限就在这里排队（不占用户连接）
+		// 每用户并发闸门：默认关闭（limit = 0 = 不限）；管理员要限流时才排队
 		release := service.AcquireImageTaskSlot(userID, limit)
 		defer release()
 		defer backgroundCtx.cancel()

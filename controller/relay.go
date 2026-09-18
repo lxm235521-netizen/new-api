@@ -583,12 +583,7 @@ func RelayTask(c *gin.Context) {
 			task.Properties.Input = strings.TrimSpace(taskReq.Prompt)
 			task.RequestSnapshot = buildTaskRequestSnapshot(taskReq)
 		}
-		// 上游把图片/视频直接以内联 base64 返回时（例如 {"url":"data:image/png;base64,..."}），
-		// 一条就是 1~3MB：原始响应里换成占位说明，upstream_task_id 换成标记，
-		// 否则任务表会被撑大、列表接口每次都要把这几十 MB 拉过来（实测 5~7 秒）。
-		// 真正的图片仍保留在 PrivateData.ResultURL 里供代理取用。
-		task.Data = common.RedactInlineDataURLs(result.TaskData)
-		task.PrivateData.UpstreamTaskID = common.RedactInlineDataURL(result.UpstreamTaskID)
+		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
