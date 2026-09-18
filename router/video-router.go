@@ -14,6 +14,16 @@ func SetVideoRouter(router *gin.Engine) {
 	videoProxyRouter.Use(middleware.TokenOrUserAuth())
 	{
 		videoProxyRouter.GET("/videos/:task_id/content", controller.VideoProxy)
+		// 图片结果走同一套代理逻辑（上游给的多半是 http 地址，https 页面直接引用会被拦）
+		videoProxyRouter.GET("/images/tasks/:task_id/content", controller.VideoProxy)
+	}
+
+	// 图片任务是同步上游包出来的异步任务：进度只在自己库里，不查上游
+	imageTaskRouter := router.Group("/v1")
+	imageTaskRouter.Use(middleware.RouteTag("relay"))
+	imageTaskRouter.Use(middleware.TokenOrUserAuth())
+	{
+		imageTaskRouter.GET("/images/tasks/:task_id", controller.GetImageTask)
 	}
 
 	videoV1Router := router.Group("/v1")

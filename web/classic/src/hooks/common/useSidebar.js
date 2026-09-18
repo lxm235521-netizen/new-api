@@ -38,6 +38,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     log: true,
     midjourney: true,
     task: true,
+    workbench: true,
   },
   personal: {
     enabled: true,
@@ -53,6 +54,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     user: true,
     subscription: true,
     setting: true,
+    workbenchConfig: true,
   },
 };
 

@@ -682,17 +682,29 @@ type TaskRelayInfo struct {
 }
 
 type TaskSubmitReq struct {
-	Prompt         string                 `json:"prompt"`
-	Model          string                 `json:"model,omitempty"`
-	Mode           string                 `json:"mode,omitempty"`
-	Image          string                 `json:"image,omitempty"`
-	Images         []string               `json:"images,omitempty"`
-	Size           string                 `json:"size,omitempty"`
-	Duration       int                    `json:"duration,omitempty"`
-	Seconds        string                 `json:"seconds,omitempty"`
+	Prompt      string   `json:"prompt"`
+	Model       string   `json:"model,omitempty"`
+	Mode        string   `json:"mode,omitempty"`
+	Image       string   `json:"image,omitempty"`
+	Images      []string `json:"images,omitempty"`
+	Size        string   `json:"size,omitempty"`
+	Duration    int      `json:"duration,omitempty"`
+	Seconds     string   `json:"seconds,omitempty"`
+	Resolution  string   `json:"resolution,omitempty"`
+	AspectRatio string   `json:"aspect_ratio,omitempty"`
+	Audios      []string `json:"audios,omitempty"`
+	Videos      []string `json:"videos,omitempty"`
+	// InputReference / Metadata 仅用于解析，不参与上游请求体拼装
 	InputReference string                 `json:"input_reference,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
+
+// 提交即完成的同步任务（图片生成）通过这两个 key 把结果回传给控制器：
+// 适配器在 DoResponse 里写好，relay_task 读出来放进 TaskSubmitResult。
+const (
+	ContextKeyTaskResultURL  = "sync_task_result_url"
+	ContextKeyTaskFailReason = "sync_task_fail_reason"
+)
 
 func (t *TaskSubmitReq) GetPrompt() string {
 	return t.Prompt

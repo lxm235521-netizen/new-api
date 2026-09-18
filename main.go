@@ -131,6 +131,11 @@ func main() {
 	// Channel upstream model update check task
 	controller.StartChannelUpstreamModelUpdateTask()
 
+	// 清理上次进程退出时残留的图片任务（后台协程随进程消失，占位行没人补全）
+	gopool.Go(func() {
+		model.RecoverStaleImageTasks()
+	})
+
 	if common.IsMasterNode && constant.UpdateTask {
 		gopool.Go(func() {
 			controller.UpdateMidjourneyTaskBulk()

@@ -47,6 +47,8 @@ const routerMap = {
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
+  workbench: '/console/video',
+  workbenchConfig: '/console/workbench',
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
@@ -67,7 +69,10 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     canManageRedemptions,
     loading: permissionLoading,
   } = useUserPermissions();
-  const showSkeleton = useMinimumLoadingTime(sidebarLoading || permissionLoading, 200);
+  const showSkeleton = useMinimumLoadingTime(
+    sidebarLoading || permissionLoading,
+    200,
+  );
 
   const [selectedKeys, setSelectedKeys] = useState(['home']);
   const [chatItems, setChatItems] = useState([]);
@@ -111,6 +116,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/task',
         className:
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
+      },
+      {
+        text: t('视频生成'),
+        itemKey: 'workbench',
+        to: '/console/video',
       },
     ];
 
@@ -171,6 +181,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'models',
         to: '/console/models',
         className: hasAdminPermission('models') ? '' : 'tableHiddle',
+      },
+      {
+        text: t('工作台配置'),
+        itemKey: 'workbenchConfig',
+        to: '/console/workbench',
+        className: hasAdminPermission('setting') ? '' : 'tableHiddle',
       },
       {
         text: t('模型部署'),
@@ -491,8 +507,14 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             <>
               <Divider className='sidebar-divider' />
               <div>
-                {!collapsed && <div className='sidebar-group-label'>{t('兑换码管理')}</div>}
-                {renderNavItem({ text: t('兑换码管理'), itemKey: 'audit', to: '/console/audit' })}
+                {!collapsed && (
+                  <div className='sidebar-group-label'>{t('兑换码管理')}</div>
+                )}
+                {renderNavItem({
+                  text: t('兑换码管理'),
+                  itemKey: 'audit',
+                  to: '/console/audit',
+                })}
               </div>
             </>
           )}

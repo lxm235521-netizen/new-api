@@ -34,9 +34,10 @@ import (
 	taskdoubao "github.com/QuantumNous/new-api/relay/channel/task/doubao"
 	taskGemini "github.com/QuantumNous/new-api/relay/channel/task/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/task/hailuo"
-	"github.com/QuantumNous/new-api/relay/channel/task/meaicc"
+	taskimage "github.com/QuantumNous/new-api/relay/channel/task/image"
 	taskjimeng "github.com/QuantumNous/new-api/relay/channel/task/jimeng"
 	"github.com/QuantumNous/new-api/relay/channel/task/kling"
+	"github.com/QuantumNous/new-api/relay/channel/task/meaicc"
 	tasksora "github.com/QuantumNous/new-api/relay/channel/task/sora"
 	"github.com/QuantumNous/new-api/relay/channel/task/suno"
 	taskvertex "github.com/QuantumNous/new-api/relay/channel/task/vertex"
@@ -49,6 +50,13 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/zhipu"
 	"github.com/QuantumNous/new-api/relay/channel/zhipu_4v"
 	"github.com/gin-gonic/gin"
+)
+
+// TaskPlatformImage 是图片生成任务自己的平台标识。
+// 渠道类型（OpenAI=1）无法区分「视频任务」和「图片任务」，所以由请求显式声明。
+const (
+	TaskPlatformImage      = constant.TaskPlatform("image")
+	TaskPlatformContextKey = "task_platform"
 )
 
 func GetAdaptor(apiType int) channel.Adaptor {
@@ -126,6 +134,10 @@ func GetAdaptor(apiType int) channel.Adaptor {
 }
 
 func GetTaskPlatform(c *gin.Context) constant.TaskPlatform {
+	// 图片生成走同一套任务链路，但平台是自己声明的（渠道类型无法区分）
+	if platform := c.GetString(TaskPlatformContextKey); platform != "" {
+		return constant.TaskPlatform(platform)
+	}
 	channelType := c.GetInt("channel_type")
 	if channelType > 0 {
 		return constant.TaskPlatform(strconv.Itoa(channelType))
@@ -139,6 +151,9 @@ func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
 	//	return &aiproxy.Adaptor{}
 	case constant.TaskPlatformSuno:
 		return &suno.TaskAdaptor{}
+	case TaskPlatformImage:
+		// 图片生成：上游同步返回结果，走「提交即完成」的任务链路
+		return &taskimage.TaskAdaptor{}
 	}
 	if channelType, err := strconv.ParseInt(string(platform), 10, 64); err == nil {
 		switch channelType {

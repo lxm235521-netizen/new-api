@@ -1,0 +1,1139 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+/* ==========================================================================
+   视频生成工作台
+   全部颜色走 Semi 设计变量，自动跟随主题与暗色模式。
+   硬编码颜色只保留少数几个，并在 body[theme-mode='dark'] 下覆盖。
+   ========================================================================== */
+
+.wb-root {
+  --wb-scrim: rgba(255, 255, 255, 0.78);
+  --wb-shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.08);
+  --wb-shadow-cta: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 66px);
+  margin-top: 60px;
+  overflow: hidden;
+  background: var(--semi-color-bg-1);
+  color: var(--semi-color-text-0);
+}
+
+body[theme-mode='dark'] .wb-root {
+  --wb-scrim: rgba(28, 28, 30, 0.78);
+  --wb-shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.45);
+  --wb-shadow-cta: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------------------------------------------------------------- 顶栏 */
+
+.wb-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--semi-color-bg-0);
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.wb-topbar__title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.wb-topbar__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--semi-color-primary-light-default);
+  color: var(--semi-color-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wb-balance__label {
+  opacity: 0.85;
+}
+
+.wb-balance__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ 两栏布局 */
+
+.wb-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wb-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* -------------------------------------------------------- 左侧：工具栏 */
+
+.wb-toolbar {
+  flex: 0 0 auto;
+  padding: 14px 20px 12px;
+  background: var(--semi-color-bg-0);
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.wb-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wb-toolbar__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 标题左侧的强调竖条 */
+.wb-toolbar__title::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--semi-color-primary);
+}
+
+.wb-toolbar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.wb-toolbar__switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-count {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--semi-color-fill-0);
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------- 左侧：网格 */
+
+.wb-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  /* 行高必须由内容决定：
+     .wb-grid 是固定高度的滚动容器，行高是 auto 时浏览器会把所有行
+     压缩到容器高度里，卡片被 overflow:hidden 裁成一条 40px 的横条 ——
+     缩略图和提示词全被切掉。 */
+  grid-auto-rows: max-content;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  /* 横向卡片（左媒体 + 右信息）：一页 12 条按 3 列 × 4 行排。
+     列数写死而不是 auto-fill —— 面板可用宽度只有约 1000~1170px，
+     auto-fill 会在 1600 宽的窗口上掉到 2 列，卡片被拉得很空。
+     窄屏在文件末尾逐级降列。 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wb-grid::-webkit-scrollbar,
+.wb-side__scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wb-grid::-webkit-scrollbar-thumb,
+.wb-side__scroll::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--semi-color-fill-2);
+}
+
+/* ------------------------------------------------------------- 任务卡片 */
+
+/* 横向卡片：左边媒体（视频帧/参考图），右边信息。
+   媒体固定宽度 + cover 裁切，竖版 9:16 的成片正好铺满，不会留黑边。 */
+.wb-card {
+  display: flex;
+  align-items: stretch;
+  min-height: 168px;
+  overflow: hidden;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 12px;
+  background: var(--semi-color-bg-0);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.wb-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--semi-color-primary);
+  box-shadow: var(--wb-shadow-hover);
+}
+
+/* 媒体区占卡片 46%：预览要够大才看得出画面，右边还要留得下提示词 */
+.wb-card__media {
+  position: relative;
+  flex: 0 0 46%;
+  overflow: hidden;
+  background: var(--semi-color-fill-0);
+}
+
+.wb-card__media img,
+.wb-card__media video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 封面容器：参考图 / 占位 + 懒加载的首帧视频叠在一起 */
+.wb-card__holder {
+  position: absolute;
+  inset: 0;
+}
+
+/* 首帧视频：加载出来前保持透明，避免闪黑 */
+.wb-card__preview {
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+.wb-card__preview--ready {
+  opacity: 1;
+}
+
+.wb-card__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--semi-color-text-3);
+  background: linear-gradient(
+    135deg,
+    var(--semi-color-fill-0),
+    var(--semi-color-fill-1)
+  );
+}
+
+/* 播放按钮：悬停时浮出来，平时不挡画面 */
+.wb-card__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding-left: 2px;
+  border-radius: 999px;
+  background: var(--wb-scrim);
+  border: 1px solid var(--semi-color-border);
+  color: var(--semi-color-primary);
+  box-shadow: var(--wb-shadow-hover);
+  transform: translate(-50%, -50%) scale(0.9);
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.wb-card:hover .wb-card__play,
+.wb-card:focus-within .wb-card__play {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 媒体区角标：产出类型 / 时长 / 比例（左下）与耗时（左上）。
+   统一用「视频」那枚深色半透明胶囊的样式。 */
+.wb-card__badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+
+.wb-card__badge--spent {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  /* 盖在「生成中/失败」遮罩之上：耗时任何时候都该看得见 */
+  z-index: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  /* 给右下角的悬浮操作按钮留出位置 */
+  padding-right: 84px;
+}
+
+/* 生成中 / 失败时盖住媒体区的轻遮罩 */
+.wb-card__media-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wb-scrim);
+  backdrop-filter: blur(2px);
+  color: var(--semi-color-text-2);
+}
+
+.wb-card__media-mask--fail {
+  background: var(--semi-color-danger-light-default);
+  color: var(--semi-color-danger);
+}
+
+.wb-card__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.wb-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wb-card__id {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--semi-color-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 提示词盒：浅色细边框，两行截断，长提示词也不会把卡片撑变形 */
+.wb-card__prompt-box {
+  display: flex;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 5px 8px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 8px;
+  background: var(--semi-color-fill-0);
+}
+
+.wb-card__prompt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.wb-card__prompt--fail {
+  color: var(--semi-color-danger);
+}
+
+.wb-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 卡片里空间紧，标签内距比右侧面板再收一点，尽量一行放得下 */
+.wb-card__chips .wb-chip {
+  padding: 1px 6px;
+}
+
+/* 底部「生成时间」跟参数标签同一套浅色样式 */
+.wb-chip--time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 操作按钮浮在卡片右下角：不占布局宽度，悬停才出现 */
+.wb-card__actions {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--semi-color-bg-0);
+  box-shadow: var(--wb-shadow-hover);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.wb-card:hover .wb-card__actions,
+.wb-card:focus-within .wb-card__actions {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------- 右侧面板 */
+
+.wb-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--semi-color-bg-0);
+  border-left: 1px solid var(--semi-color-border);
+}
+
+.wb-side__scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  /* 面板内的控件（下拉、文本域）一律不许撑破面板宽度 */
+  overflow-x: hidden;
+  padding: 18px 18px 22px;
+}
+
+.wb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wb-field__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--semi-color-text-1);
+}
+
+.wb-field__hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--semi-color-text-2);
+}
+
+.wb-field__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 模型能力摘要（计费方式 + 参考素材上限） */
+.wb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wb-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--semi-color-fill-0);
+  color: var(--semi-color-text-2);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* ------------------------------------------------ 连续时长的下拉式选择器 */
+
+/* 触发器刻意对齐 Semi Select 的外观（同高度/圆角/边框/内距），
+   这样它和「分辨率」「比例」等下拉框看起来是同一套控件 */
+.wb-range-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--semi-color-text-0);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.wb-range-trigger:hover {
+  border-color: var(--semi-color-primary);
+  background: var(--semi-color-fill-0);
+}
+
+.wb-range-trigger:focus-visible {
+  outline: none;
+  border-color: var(--semi-color-primary);
+  box-shadow: 0 0 0 2px var(--semi-color-primary-light-default);
+}
+
+.wb-range-trigger svg {
+  flex: 0 0 auto;
+  color: var(--semi-color-text-2);
+}
+
+.wb-range__popover {
+  padding: 0;
+}
+
+.wb-range__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 240px;
+  padding: 14px 14px 10px;
+}
+
+.wb-range__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-range__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wb-range__input {
+  width: 78px;
+  flex: 0 0 auto;
+}
+
+.wb-range__unit {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-range__presets {
+  display: flex;
+  gap: 6px;
+}
+
+.wb-range__hint {
+  font-size: 11px;
+  color: var(--semi-color-text-3);
+}
+
+.wb-param--wide {
+  grid-column: 1 / -1;
+}
+
+/* ------------------------------------------------------------- 提示词优化 */
+
+.wb-optimize-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-optimize-meta {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--semi-color-fill-0);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--semi-color-text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wb-spin {
+  animation: wb-spin 0.9s linear infinite;
+}
+
+@keyframes wb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wb-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.wb-tip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--semi-color-warning-light-default);
+  color: var(--semi-color-text-1);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.wb-tip__icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--semi-color-warning);
+}
+
+/* --------------------------------------------------------------- 上传区 */
+
+.wb-dropzone {
+  padding: 12px;
+  border: 1px dashed var(--semi-color-border);
+  border-radius: 12px;
+  background: var(--semi-color-fill-0);
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.wb-dropzone:hover {
+  border-color: var(--semi-color-primary);
+}
+
+.wb-dropzone--active {
+  border-color: var(--semi-color-primary);
+  background: var(--semi-color-primary-light-default);
+}
+
+.wb-dropzone--disabled {
+  opacity: 0.6;
+}
+
+.wb-dropzone__inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wb-dropzone__icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--semi-color-bg-0);
+  border: 1px solid var(--semi-color-border);
+  color: var(--semi-color-primary);
+}
+
+.wb-dropzone__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wb-dropzone__title {
+  font-size: 12px;
+  color: var(--semi-color-text-1);
+  line-height: 1.5;
+}
+
+.wb-dropzone__sub {
+  font-size: 11px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wb-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid var(--semi-color-border);
+  overflow: hidden;
+  background: var(--semi-color-fill-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wb-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wb-thumb__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 999px;
+  background: var(--semi-color-bg-0);
+  color: var(--semi-color-text-1);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.wb-thumb:hover .wb-thumb__remove,
+.wb-thumb__remove:focus-visible {
+  opacity: 1;
+}
+
+.wb-thumb__mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wb-scrim);
+}
+
+/* --------------------------------------------------------------- 参数区 */
+
+.wb-params {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wb-param {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-param__label {
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+}
+
+/* --------------------------------------------------------------- 提交条 */
+
+.wb-submit {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 16px;
+  background: var(--semi-color-bg-0);
+  border-top: 1px solid var(--semi-color-border);
+}
+
+.wb-submit__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wb-submit__price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.wb-submit__price-label {
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-submit__price-value {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-submit__billing {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--semi-color-fill-0);
+  color: var(--semi-color-text-2);
+  font-size: 11px;
+}
+
+.wb-submit .semi-button-primary {
+  box-shadow: var(--wb-shadow-cta);
+}
+
+/* ------------------------------------------------------------- 分页器 */
+
+.wb-pager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--semi-color-bg-0);
+  border-top: 1px solid var(--semi-color-border);
+}
+
+.wb-pager__hint {
+  font-size: 12px;
+  color: var(--semi-color-text-2);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- 任务详情 */
+
+.wb-card--clickable {
+  cursor: pointer;
+}
+
+.wb-card--clickable:focus-visible {
+  outline: 2px solid var(--semi-color-primary);
+  outline-offset: 2px;
+}
+
+.wb-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  max-height: 70vh;
+}
+
+.wb-detail__left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 16px;
+  /* 播放器底色固定为深色，浅色主题下也不刺眼 */
+  background: #0b0b0c;
+}
+
+.wb-detail__media {
+  display: block;
+  max-width: 100%;
+  max-height: 62vh;
+  border-radius: 8px;
+}
+
+.wb-detail__fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 288px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-detail__fallback--fail {
+  color: var(--semi-color-danger);
+}
+
+.wb-detail__progress {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-detail__right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 70vh;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.wb-detail__block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wb-detail__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--semi-color-text-2);
+}
+
+.wb-detail__prompt {
+  max-height: 132px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: var(--semi-color-fill-0);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wb-detail__refs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wb-detail__ref-title {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-detail__ref-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wb-detail__ref {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 8px;
+  background: var(--semi-color-fill-0);
+  color: var(--semi-color-text-2);
+}
+
+.wb-detail__ref img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wb-detail__params {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.wb-detail__param {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wb-detail__param-label {
+  font-size: 11px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-detail__param-value {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--semi-color-text-0);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-detail__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-detail__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--semi-color-border);
+}
+
+/* --------------------------------------------------------------- 空状态 */
+.wb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 240px;
+  color: var(--semi-color-text-2);
+}
+
+.wb-empty__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: var(--semi-color-fill-0);
+  color: var(--semi-color-text-3);
+}
+
+.wb-empty__title {
+  font-size: 13px;
+  color: var(--semi-color-text-1);
+}
+
+/* --------------------------------------------------------- 模型下拉分组 */
+
+.wb-model-select {
+  width: 100%;
+}
+
+.wb-model-select .semi-select-option-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--semi-color-text-2);
+}
+
+/* ------------------------------------------------------------- 窄屏适配 */
+
+@media (max-width: 1200px) {
+  .wb-side {
+    width: 340px;
+  }
+
+  .wb-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .wb-root {
+    height: auto;
+    min-height: calc(100vh - 66px);
+    overflow-y: auto;
+  }
+
+  .wb-body {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .wb-main {
+    min-height: 60vh;
+  }
+
+  .wb-side {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--semi-color-border);
+  }
+
+  .wb-grid {
+    overflow-y: visible;
+    /* 单列：手机上卡片才放得下提示词和参数 */
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wb-card {
+    min-height: 140px;
+  }
+
+  .wb-side__scroll {
+    overflow-y: visible;
+  }
+
+  /* 窄屏下详情改为上下排布 */
+  .wb-detail {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: none;
+  }
+
+  .wb-detail__left {
+    min-height: 220px;
+  }
+
+  .wb-detail__right {
+    max-height: none;
+  }
+
+  .wb-detail__fallback {
+    min-height: 188px;
+  }
+}

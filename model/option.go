@@ -599,6 +599,8 @@ func handleConfigUpdate(key, value string) bool {
 		operation_setting.RebuildToolPriceIndex()
 	} else if configName == "task_per_call_billing_setting" {
 		operation_setting.RebuildTaskPerCallBillingIndex()
+	} else if configName == "workbench_setting" {
+		operation_setting.NormalizeWorkbenchSetting()
 	} else if configName == "billing_setting" {
 		InvalidatePricingCache()
 		ratio_setting.InvalidateExposedDataCache()

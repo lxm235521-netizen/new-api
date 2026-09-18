@@ -30,6 +30,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showSuccess, showError } from '../../../helpers';
 import { StatusContext } from '../../../context/Status';
+import { mergeAdminConfig } from '../../../hooks/common/useSidebar';
 
 const { Text } = Typography;
 
@@ -52,6 +53,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       log: true,
       midjourney: true,
       task: true,
+      workbench: true,
     },
     personal: {
       enabled: true,
@@ -67,6 +69,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       user: true,
       subscription: true,
       setting: true,
+      workbenchConfig: true,
     },
   });
 
@@ -113,6 +116,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         log: true,
         midjourney: true,
         task: true,
+        workbench: true,
       },
       personal: {
         enabled: true,
@@ -128,6 +132,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         user: true,
         subscription: true,
         setting: true,
+        workbenchConfig: true,
       },
     };
     setSidebarModulesAdmin(defaultModules);
@@ -174,10 +179,12 @@ export default function SettingsSidebarModulesAdmin(props) {
     if (props.options && props.options.SidebarModulesAdmin) {
       try {
         const modules = JSON.parse(props.options.SidebarModulesAdmin);
-        setSidebarModulesAdmin(modules);
+        // 必须与运行时同样补齐默认值：否则历史配置里缺失的新模块
+        // 会在开关上显示为关闭，而侧边栏实际是显示的。
+        setSidebarModulesAdmin(mergeAdminConfig(modules));
       } catch (error) {
         // 使用默认配置
-        const defaultModules = {
+        setSidebarModulesAdmin({
           chat: { enabled: true, playground: true, chat: true },
           console: {
             enabled: true,
@@ -186,6 +193,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             log: true,
             midjourney: true,
             task: true,
+            workbench: true,
           },
           personal: { enabled: true, topup: true, personal: true },
           admin: {
@@ -197,9 +205,9 @@ export default function SettingsSidebarModulesAdmin(props) {
             user: true,
             subscription: true,
             setting: true,
+            workbenchConfig: true,
           },
-        };
-        setSidebarModulesAdmin(defaultModules);
+        });
       }
     }
   }, [props.options]);
@@ -233,6 +241,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        {
+          key: 'workbench',
+          title: t('视频生成'),
+          description: t('视频生成工作台与任务历史'),
+        },
       ],
     },
     {
@@ -275,6 +288,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'setting',
           title: t('系统设置'),
           description: t('系统参数配置'),
+        },
+        {
+          key: 'workbenchConfig',
+          title: t('工作台配置'),
+          description: t('视频生成工作台的模型与参数配置'),
         },
       ],
     },

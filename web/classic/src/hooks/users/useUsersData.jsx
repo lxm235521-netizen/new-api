@@ -47,6 +47,7 @@ export const useUsersData = () => {
   const formInitValues = {
     searchKeyword: '',
     searchGroup: '',
+    inviterId: '',
   };
 
   // Form API reference
@@ -58,6 +59,7 @@ export const useUsersData = () => {
     return {
       searchKeyword: formValues.searchKeyword || '',
       searchGroup: formValues.searchGroup || '',
+      inviterId: formValues.inviterId || '',
     };
   };
 
@@ -91,22 +93,24 @@ export const useUsersData = () => {
     pageSize,
     searchKeyword = null,
     searchGroup = null,
+    inviterId = null,
   ) => {
     // If no parameters passed, get values from form
-    if (searchKeyword === null || searchGroup === null) {
+    if (searchKeyword === null || searchGroup === null || inviterId === null) {
       const formValues = getFormValues();
       searchKeyword = formValues.searchKeyword;
       searchGroup = formValues.searchGroup;
+      inviterId = formValues.inviterId;
     }
 
-    if (searchKeyword === '' && searchGroup === '') {
+    if (searchKeyword === '' && searchGroup === '' && inviterId === '') {
       // If keyword is blank, load files instead
       await loadUsers(startIdx, pageSize);
       return;
     }
     setSearching(true);
     const res = await API.get(
-      `/api/user/search?keyword=${searchKeyword}&group=${searchGroup}&p=${startIdx}&page_size=${pageSize}`,
+      `/api/user/search?keyword=${encodeURIComponent(searchKeyword)}&group=${encodeURIComponent(searchGroup)}&inviter_id=${encodeURIComponent(inviterId)}&p=${startIdx}&page_size=${pageSize}`,
     );
     const { success, message, data } = res.data;
     if (success) {
@@ -191,8 +195,8 @@ export const useUsersData = () => {
   // Handle page change
   const handlePageChange = (page) => {
     setActivePage(page);
-    const { searchKeyword, searchGroup } = getFormValues();
-    if (searchKeyword === '' && searchGroup === '') {
+    const { searchKeyword, searchGroup, inviterId } = getFormValues();
+    if (searchKeyword === '' && searchGroup === '' && inviterId === '') {
       loadUsers(page, pageSize).then();
     } else {
       searchUsers(page, pageSize, searchKeyword, searchGroup).then();
@@ -226,8 +230,8 @@ export const useUsersData = () => {
 
   // Refresh data
   const refresh = async (page = activePage) => {
-    const { searchKeyword, searchGroup } = getFormValues();
-    if (searchKeyword === '' && searchGroup === '') {
+    const { searchKeyword, searchGroup, inviterId } = getFormValues();
+    if (searchKeyword === '' && searchGroup === '' && inviterId === '') {
       await loadUsers(page, pageSize);
     } else {
       await searchUsers(page, pageSize, searchKeyword, searchGroup);

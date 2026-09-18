@@ -1,5 +1,10 @@
 package model
 
+import (
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
+)
+
 type Midjourney struct {
 	Id          int    `json:"id"`
 	Code        int    `json:"code"`
@@ -149,6 +154,84 @@ func (midjourney *Midjourney) Insert() error {
 	var err error
 	err = DB.Create(midjourney).Error
 	return err
+}
+
+// SyncImageTaskToDrawingLog 把一条「图片生成」任务同步到绘图日志（midjourneys 表）。
+//
+// 图片任务本身存在 tasks 表（复用了计费/代理/工作台那套基础设施），但业务上它属于
+// 「绘图日志」而不是「任务日志」—— 所以这里按 mj_id = 任务公开 ID 维护一条镜像记录，
+// 绘图日志页（/console/midjourney）就能直接看到，任务日志则按平台把图片任务排除掉。
+func SyncImageTaskToDrawingLog(task *Task) {
+	if task == nil || task.TaskID == "" {
+		return
+	}
+
+	code := 1
+	if task.Status == TaskStatusFailure {
+		code = 0
+	}
+	imageURL := task.GetResultURL()
+	if task.Status == TaskStatusSuccess {
+		if proxyURL := system_setting.BuildImageProxyURL(task.TaskID); proxyURL != "" {
+			imageURL = proxyURL
+		}
+	}
+
+	properties, _ := common.Marshal(map[string]any{
+		"model":          task.Properties.OriginModelName,
+		"upstream_model": task.Properties.UpstreamModelName,
+		"size":           task.RequestSnapshot.Size,
+		"resolution":     task.RequestSnapshot.Resolution,
+	})
+
+	record := Midjourney{
+		Code:       code,
+		UserId:     task.UserId,
+		Action:     "IMAGINE",
+		MjId:       task.TaskID,
+		Prompt:     task.Properties.Input,
+		State:      string(task.Status),
+		SubmitTime: task.SubmitTime,
+		StartTime:  task.StartTime,
+		FinishTime: task.FinishTime,
+		ImageUrl:   imageURL,
+		Status:     string(task.Status),
+		Progress:   task.Progress,
+		FailReason: task.FailReason,
+		ChannelId:  task.ChannelId,
+		Quota:      task.Quota,
+		Properties: string(properties),
+	}
+
+	var existing Midjourney
+	err := DB.Where("mj_id = ?", task.TaskID).First(&existing).Error
+	if err == nil {
+		record.Id = existing.Id
+		if updateErr := DB.Model(&Midjourney{}).Where("id = ?", existing.Id).Updates(map[string]any{
+			"code":        record.Code,
+			"user_id":     record.UserId,
+			"action":      record.Action,
+			"prompt":      record.Prompt,
+			"state":       record.State,
+			"submit_time": record.SubmitTime,
+			"start_time":  record.StartTime,
+			"finish_time": record.FinishTime,
+			"image_url":   record.ImageUrl,
+			"status":      record.Status,
+			"progress":    record.Progress,
+			"fail_reason": record.FailReason,
+			"channel_id":  record.ChannelId,
+			"quota":       record.Quota,
+			"properties":  record.Properties,
+		}).Error; updateErr != nil {
+			common.SysError("sync image task to drawing log failed: " + updateErr.Error())
+		}
+		return
+	}
+
+	if insertErr := record.Insert(); insertErr != nil {
+		common.SysError("insert drawing log for image task failed: " + insertErr.Error())
+	}
 }
 
 func (midjourney *Midjourney) Update() error {

@@ -60,7 +60,9 @@ type Task struct {
 	FinishTime int64                 `json:"finish_time" gorm:"index"`
 	Progress   string                `json:"progress" gorm:"type:varchar(20);index"`
 	Properties Properties            `json:"properties" gorm:"type:json"`
-	Username   string                `json:"username,omitempty" gorm:"-"`
+	// 提交参数快照（单独一列，见 TaskRequestSnapshot 的说明）
+	RequestSnapshot TaskRequestSnapshot `json:"-" gorm:"column:request_snapshot;type:json"`
+	Username        string              `json:"username,omitempty" gorm:"-"`
 	// 禁止返回给用户，内部可能包含key等隐私信息
 	PrivateData TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
 	Data        json.RawMessage `json:"data" gorm:"type:json"`
@@ -79,6 +81,46 @@ type Properties struct {
 	Input             string `json:"input"`
 	UpstreamModelName string `json:"upstream_model_name,omitempty"`
 	OriginModelName   string `json:"origin_model_name,omitempty"`
+}
+
+// TaskRequestSnapshot 记录客户端提交任务时用到的关键参数，
+// 供工作台展示「时长/比例/参数配置」以及「复用配置」。
+//
+// 单独存一列（tasks.request_snapshot）而不是塞进 properties：
+// 集群里任何旧版本节点的轮询都会把 properties 整列按自己的结构体回写，
+// 旧结构体不认识新字段就会把它们抹掉；独立列不在旧版本的模型里，写不到。
+type TaskRequestSnapshot struct {
+	Mode        string   `json:"mode,omitempty"`
+	Duration    int      `json:"duration,omitempty"`
+	Resolution  string   `json:"resolution,omitempty"`
+	AspectRatio string   `json:"aspect_ratio,omitempty"`
+	Size        string   `json:"size,omitempty"`
+	Images      []string `json:"images,omitempty"`
+	Audios      []string `json:"audios,omitempty"`
+	Videos      []string `json:"videos,omitempty"`
+}
+
+// IsEmpty 判断快照里有没有真正可用的信息
+func (s TaskRequestSnapshot) IsEmpty() bool {
+	return s.Mode == "" && s.Duration == 0 && s.Resolution == "" &&
+		s.AspectRatio == "" && s.Size == "" && s.Images == nil &&
+		s.Audios == nil && s.Videos == nil
+}
+
+func (s *TaskRequestSnapshot) Scan(val interface{}) error {
+	bytesValue, _ := val.([]byte)
+	if len(bytesValue) == 0 {
+		*s = TaskRequestSnapshot{}
+		return nil
+	}
+	return common.Unmarshal(bytesValue, s)
+}
+
+func (s TaskRequestSnapshot) Value() (driver.Value, error) {
+	if s.IsEmpty() {
+		return nil, nil
+	}
+	return common.Marshal(s)
 }
 
 func (m *Properties) Scan(val interface{}) error {
@@ -168,6 +210,9 @@ type SyncTaskQueryParams struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+	// ExcludePlatform 排除某个平台。图片生成任务属于「绘图日志」，
+	// 用 exclude_platform=image 把任务日志里的图片记录去掉。
+	ExcludePlatform string
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -228,6 +273,9 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)
 	}
+	if queryParams.ExcludePlatform != "" {
+		query = query.Where("platform != ?", queryParams.ExcludePlatform)
+	}
 	if queryParams.StartTimestamp != 0 {
 		// 假设您已将前端传来的时间戳转换为数据库所需的时间格式，并处理了时间戳的验证和解析
 		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
@@ -258,6 +306,9 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)
+	}
+	if queryParams.ExcludePlatform != "" {
+		query = query.Where("platform != ?", queryParams.ExcludePlatform)
 	}
 	if queryParams.UserID != "" {
 		query = query.Where("user_id = ?", queryParams.UserID)
@@ -290,10 +341,15 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	return tasks
 }
 
+// 图片任务是同步上游（提交即出结果），没有可轮询的上游状态：
+// 轮询和超时清理都必须跳过 platform=image，否则会把还在生成中的占位行判死。
+const imageTaskPlatformFilter = "image"
+
 func GetTimedOutUnfinishedTasks(cutoffUnix int64, limit int) []*Task {
 	var tasks []*Task
 	err := DB.Where("progress != ?", "100%").
 		Where("status NOT IN ?", []string{TaskStatusFailure, TaskStatusSuccess}).
+		Where("platform != ?", imageTaskPlatformFilter).
 		Where("submit_time < ?", cutoffUnix).
 		Order("submit_time").
 		Limit(limit).
@@ -308,7 +364,11 @@ func GetAllUnFinishSyncTasks(limit int) []*Task {
 	var tasks []*Task
 	var err error
 	// get all tasks progress is not 100%
-	err = DB.Where("progress != ?", "100%").Where("status != ?", TaskStatusFailure).Where("status != ?", TaskStatusSuccess).Limit(limit).Order("id").Find(&tasks).Error
+	err = DB.Where("progress != ?", "100%").
+		Where("status != ?", TaskStatusFailure).
+		Where("status != ?", TaskStatusSuccess).
+		Where("platform != ?", imageTaskPlatformFilter).
+		Limit(limit).Order("id").Find(&tasks).Error
 	if err != nil {
 		return nil
 	}
@@ -364,6 +424,32 @@ func (Task *Task) Insert() error {
 	return err
 }
 
+// UpdateFromRelayResult 用中继的最终结果补全一条已存在的任务行。
+//
+// 异步图片生成会先落一条「排队中」的占位行（这样用户切页面回来还能看到进行中的任务），
+// 上游返回后再按 task_id 把它补全成 SUCCESS / FAILURE。
+// 用 map 更新：零值字段（如空 fail_reason）也要写进去。
+func (task *Task) UpdateFromRelayResult() error {
+	return DB.Model(&Task{}).
+		Where("task_id = ? AND user_id = ?", task.TaskID, task.UserId).
+		Updates(map[string]any{
+			"platform":         task.Platform,
+			"channel_id":       task.ChannelId,
+			"group":            task.Group,
+			"quota":            task.Quota,
+			"action":           task.Action,
+			"status":           task.Status,
+			"fail_reason":      task.FailReason,
+			"start_time":       task.StartTime,
+			"finish_time":      task.FinishTime,
+			"progress":         task.Progress,
+			"properties":       task.Properties,
+			"request_snapshot": task.RequestSnapshot,
+			"private_data":     task.PrivateData,
+			"data":             task.Data,
+		}).Error
+}
+
 type taskSnapshot struct {
 	Status     TaskStatus
 	Progress   string
@@ -409,8 +495,17 @@ func (Task *Task) Update() error {
 // Uses Model().Select("*").Updates() instead of Save() because GORM's Save
 // falls back to INSERT ON CONFLICT when the WHERE-guarded UPDATE matches
 // zero rows, which silently bypasses the CAS guard.
+//
+// 刻意 Omit("properties", "request_snapshot")：轮询只改状态/进度/结果，
+// 从不修改这两列。而 Select("*") 会把整列按内存里的结构体回写，
+// 于是集群里任何一个版本不一致的节点（结构体不认识新字段/新列）
+// 都会在 15 秒内把新内容抹掉。
 func (t *Task) UpdateWithStatus(fromStatus TaskStatus) (bool, error) {
-	result := DB.Model(t).Where("status = ?", fromStatus).Select("*").Updates(t)
+	result := DB.Model(t).
+		Omit("properties", "request_snapshot").
+		Where("status = ?", fromStatus).
+		Select("*").
+		Updates(t)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -457,6 +552,9 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)
 	}
+	if queryParams.ExcludePlatform != "" {
+		query = query.Where("platform != ?", queryParams.ExcludePlatform)
+	}
 	if queryParams.UserID != "" {
 		query = query.Where("user_id = ?", queryParams.UserID)
 	}
@@ -497,6 +595,9 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	}
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)
+	}
+	if queryParams.ExcludePlatform != "" {
+		query = query.Where("platform != ?", queryParams.ExcludePlatform)
 	}
 	if queryParams.StartTimestamp != 0 {
 		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)

@@ -191,6 +191,30 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	return nil, errors.New("channel not found")
 }
 
+// GetAnyEnabledChannelID 随便取一个渠道 ID（优先启用中的）。
+//
+// 用途：图片任务先落「排队中」占位行时，集群里版本不一致的旧节点轮询会先做
+// CacheGetChannel(task.ChannelId)，ID=0 会直接失败并把任务判死（实测 15 秒内）。
+// 给一个真实存在的渠道 ID，旧节点就会在「没有对应适配器」那一步安全退出（只记日志、不写库）。
+// 中继完成后会用真实渠道 ID 覆盖它。
+func GetAnyEnabledChannelID() int {
+	if common.MemoryCacheEnabled {
+		channelSyncLock.RLock()
+		defer channelSyncLock.RUnlock()
+		for _, channel := range channelsIDM {
+			if channel != nil && channel.Status == common.ChannelStatusEnabled {
+				return channel.Id
+			}
+		}
+	}
+
+	var channel Channel
+	if err := DB.Where("status = ?", common.ChannelStatusEnabled).Order("id").First(&channel).Error; err == nil {
+		return channel.Id
+	}
+	return 0
+}
+
 func CacheGetChannel(id int) (*Channel, error) {
 	if !common.MemoryCacheEnabled {
 		return GetChannelById(id, true)

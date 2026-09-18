@@ -32,6 +32,14 @@ func videoProxyError(c *gin.Context, status int, errType, message string) {
 	})
 }
 
+// isImageTask 判断是不是「图片生成」任务。
+//
+// 图片走的是同一套任务表，但平台标识是 relay.TaskPlatformImage（渠道类型区分不了：
+// 图片渠道也是 OpenAI 类型），结果地址直接存在 PrivateData.ResultURL 里。
+func isImageTask(task *model.Task) bool {
+	return string(task.Platform) == "image"
+}
+
 func VideoProxy(c *gin.Context) {
 	taskID := c.Param("task_id")
 	if taskID == "" {
@@ -86,6 +94,13 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
+	// 播放器会用 Range 分段拉取（这批 mp4 的 moov 在文件尾部，必须能跳到末尾读），
+	// 但这里**不能**把 Range 直接转发给「任务内容接口」——那个接口返回的是 JSON
+	// 元数据（内含真正的媒体地址），带上 Range 只会拿到一段 JSON。
+	// 所以先不带 Range 取元数据，解析出真实媒体地址后再把 Range 转发给媒体源
+	// （对象存储支持 206；旧的单跳地址在下面单独重试一次）。
+	rangeHeader := strings.TrimSpace(c.GetHeader("Range"))
+
 	switch channel.Type {
 	case constant.ChannelTypeGemini:
 		apiKey := task.PrivateData.Key
@@ -108,12 +123,22 @@ func VideoProxy(c *gin.Context) {
 			videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve Vertex video URL")
 			return
 		}
-	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
-		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
-		req.Header.Set("Authorization", "Bearer "+channel.Key)
 	default:
-		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
-		videoURL = task.GetResultURL()
+		// 图片任务（同步上游）以及其它把最终地址存在 PrivateData.ResultURL 的平台：
+		// 直接取存下来的地址。必须放在 OpenAI/Sora 分支之前判断 —— 图片渠道也是
+		// OpenAI 类型，但它的结果不在上游的 /v1/videos/{id}/content 上。
+		if isImageTask(task) {
+			videoURL = task.GetResultURL()
+			break
+		}
+		switch channel.Type {
+		case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
+			videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
+			req.Header.Set("Authorization", "Bearer "+channel.Key)
+		default:
+			// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
+			videoURL = task.GetResultURL()
+		}
 	}
 
 	videoURL = strings.TrimSpace(videoURL)
@@ -153,7 +178,7 @@ func VideoProxy(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned status %d for %s", resp.StatusCode, videoURL))
 		videoProxyError(c, http.StatusBadGateway, "server_error",
 			fmt.Sprintf("Upstream service returned status %d", resp.StatusCode))
@@ -194,6 +219,10 @@ func VideoProxy(c *gin.Context) {
 				return
 			}
 			mediaReq := req.Clone(ctx)
+			// 真实媒体源（对象存储 / CDN）支持 Range，转发给播放器用
+			if rangeHeader != "" {
+				mediaReq.Header.Set("Range", rangeHeader)
+			}
 			if mediaURLParsed, parseMediaErr := url.Parse(videoURL); parseMediaErr == nil && mediaURLParsed.Host != originalHost {
 				mediaReq.Header.Del("Authorization")
 				mediaReq.Header.Del("x-goog-api-key")
@@ -206,7 +235,7 @@ func VideoProxy(c *gin.Context) {
 			}
 			defer resp.Body.Close()
 			streamBody = resp.Body
-			if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 				logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned status %d for %s", resp.StatusCode, videoURL))
 				videoProxyError(c, http.StatusBadGateway, "server_error",
 					fmt.Sprintf("Upstream service returned status %d", resp.StatusCode))
@@ -217,6 +246,23 @@ func VideoProxy(c *gin.Context) {
 			logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned JSON without a video URL for task %s", taskID))
 			videoProxyError(c, http.StatusBadGateway, "server_error", "Upstream did not return video content")
 			return
+		}
+	}
+
+	if !isJSON && rangeHeader != "" {
+		// 回源本身就是媒体文件（没有 JSON 中转）：带 Range 再要一次，
+		// 让播放器拿到 206，可以跳到文件尾部读 moov。
+		retryReq := req.Clone(ctx)
+		retryReq.Header.Set("Range", rangeHeader)
+		if retryResp, retryErr := client.Do(retryReq); retryErr == nil {
+			if retryResp.StatusCode == http.StatusPartialContent || retryResp.StatusCode == http.StatusOK {
+				resp.Body.Close()
+				resp = retryResp
+				streamBody = resp.Body
+				defer resp.Body.Close()
+			} else {
+				retryResp.Body.Close()
+			}
 		}
 	}
 

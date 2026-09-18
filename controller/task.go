@@ -26,13 +26,14 @@ func GetAllTask(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	// 解析其他查询参数
 	queryParams := model.SyncTaskQueryParams{
-		Platform:       constant.TaskPlatform(c.Query("platform")),
-		TaskID:         c.Query("task_id"),
-		Status:         c.Query("status"),
-		Action:         c.Query("action"),
-		StartTimestamp: startTimestamp,
-		EndTimestamp:   endTimestamp,
-		ChannelID:      c.Query("channel_id"),
+		Platform:        constant.TaskPlatform(c.Query("platform")),
+		TaskID:          c.Query("task_id"),
+		Status:          c.Query("status"),
+		Action:          c.Query("action"),
+		StartTimestamp:  startTimestamp,
+		EndTimestamp:    endTimestamp,
+		ChannelID:       c.Query("channel_id"),
+		ExcludePlatform: c.Query("exclude_platform"),
 	}
 
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
@@ -51,12 +52,13 @@ func GetUserTask(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 
 	queryParams := model.SyncTaskQueryParams{
-		Platform:       constant.TaskPlatform(c.Query("platform")),
-		TaskID:         c.Query("task_id"),
-		Status:         c.Query("status"),
-		Action:         c.Query("action"),
-		StartTimestamp: startTimestamp,
-		EndTimestamp:   endTimestamp,
+		Platform:        constant.TaskPlatform(c.Query("platform")),
+		TaskID:          c.Query("task_id"),
+		Status:          c.Query("status"),
+		Action:          c.Query("action"),
+		StartTimestamp:  startTimestamp,
+		EndTimestamp:    endTimestamp,
+		ExcludePlatform: c.Query("exclude_platform"),
 	}
 
 	items := model.TaskGetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)

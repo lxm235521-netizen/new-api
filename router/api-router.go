@@ -67,6 +67,13 @@ func SetApiRouter(router *gin.Engine) {
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
 
+		// 视频生成工作台：返回管理员配置的模型目录 + 按当前用户解析的单价
+		workbenchRoute := apiRouter.Group("/workbench")
+		workbenchRoute.Use(middleware.UserAuth())
+		{
+			workbenchRoute.GET("/models", controller.GetWorkbenchModels)
+		}
+
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, middleware.TurnstileCheck(), controller.Register)

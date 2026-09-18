@@ -86,12 +86,14 @@ func validateMultipartTaskRequest(c *gin.Context, info *RelayInfo, action string
 
 	formData := c.Request.PostForm
 	req = TaskSubmitReq{
-		Prompt:   formData.Get("prompt"),
-		Model:    formData.Get("model"),
-		Mode:     formData.Get("mode"),
-		Image:    formData.Get("image"),
-		Size:     formData.Get("size"),
-		Metadata: make(map[string]interface{}),
+		Prompt:      formData.Get("prompt"),
+		Model:       formData.Get("model"),
+		Mode:        formData.Get("mode"),
+		Image:       formData.Get("image"),
+		Size:        formData.Get("size"),
+		Resolution:  formData.Get("resolution"),
+		AspectRatio: formData.Get("aspect_ratio"),
+		Metadata:    make(map[string]interface{}),
 	}
 
 	if durationStr := formData.Get("seconds"); durationStr != "" {
@@ -102,6 +104,14 @@ func validateMultipartTaskRequest(c *gin.Context, info *RelayInfo, action string
 
 	if images := formData["images"]; len(images) > 0 {
 		req.Images = images
+	}
+
+	if audios := formData["audios"]; len(audios) > 0 {
+		req.Audios = audios
+	}
+
+	if videos := formData["videos"]; len(videos) > 0 {
+		req.Videos = videos
 	}
 
 	for key, values := range formData {
@@ -190,6 +200,11 @@ func isKnownTaskField(field string) bool {
 		"images":          true,
 		"size":            true,
 		"duration":        true,
+		"seconds":         true,
+		"resolution":      true,
+		"aspect_ratio":    true,
+		"audios":          true,
+		"videos":          true,
 		"input_reference": true, // Sora 特有字段
 	}
 	return knownFields[field]

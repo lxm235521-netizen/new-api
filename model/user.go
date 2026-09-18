@@ -19,15 +19,15 @@ import (
 const UserNameMaxLength = 20
 
 const (
-	AdminPermissionChannel             = "channel"
-	AdminPermissionModels              = "models"
-	AdminPermissionDeployment          = "deployment"
-	AdminPermissionSubscription        = "subscription"
-	AdminPermissionRedemption          = "redemption"
-	AdminPermissionAudit               = "audit"
-	AdminPermissionUser                = "user"
-	AdminPermissionSetting             = "setting"
-	AdminPermissionManagement          = "permission_management"
+	AdminPermissionChannel      = "channel"
+	AdminPermissionModels       = "models"
+	AdminPermissionDeployment   = "deployment"
+	AdminPermissionSubscription = "subscription"
+	AdminPermissionRedemption   = "redemption"
+	AdminPermissionAudit        = "audit"
+	AdminPermissionUser         = "user"
+	AdminPermissionSetting      = "setting"
+	AdminPermissionManagement   = "permission_management"
 )
 
 var adminPermissionKeys = []string{
@@ -68,24 +68,24 @@ type User struct {
 	OidcId               string         `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId             string         `json:"wechat_id" gorm:"column:wechat_id;index"`
 	TelegramId           string         `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode    string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken         *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
-	Quota               int            `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota           int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
-	RequestCount        int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group               string         `json:"group" gorm:"type:varchar(64);default:'default'"`
-	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
-	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
-	AffQuota         int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
-	AffHistoryQuota  int            `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
-	InviterId        int            `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
-	LinuxDOId        string         `json:"linux_do_id" gorm:"column:linux_do_id;index"`
-	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
-	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
-	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	VerificationCode     string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
+	AccessToken          *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	Quota                int            `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota            int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
+	RequestCount         int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	Group                string         `json:"group" gorm:"type:varchar(64);default:'default'"`
+	AffCode              string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	AffCount             int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
+	AffQuota             int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
+	AffHistoryQuota      int            `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
+	InviterId            int            `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	DeletedAt            gorm.DeletedAt `gorm:"index"`
+	LinuxDOId            string         `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	Setting              string         `json:"setting" gorm:"type:text;column:setting"`
+	Remark               string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	StripeCustomer       string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	CreatedAt            int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt          int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -367,7 +367,7 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	return users, total, nil
 }
 
-func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int) ([]*User, int64, error) {
+func SearchUsers(keyword string, group string, role *int, status *int, inviterId *int, startIdx int, num int) ([]*User, int64, error) {
 	var users []*User
 	var total int64
 	var err error
@@ -394,8 +394,8 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	keywordInt, err := strconv.Atoi(keyword)
 	if err == nil {
 		// 如果是数字，同时搜索ID和其他字段
-		likeCondition = "id = ? OR " + likeCondition
-		likeArgs = append([]interface{}{keywordInt}, likeArgs...)
+		likeCondition = "id = ? OR inviter_id = ? OR " + likeCondition
+		likeArgs = append([]interface{}{keywordInt, keywordInt}, likeArgs...)
 	}
 
 	query = query.Where("("+likeCondition+")", likeArgs...)
@@ -407,6 +407,9 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	}
 	if status != nil {
 		query = query.Where("status = ?", *status)
+	}
+	if inviterId != nil {
+		query = query.Where("inviter_id = ?", *inviterId)
 	}
 
 	// 获取总数
@@ -673,10 +676,10 @@ func (user *User) edit(db *gorm.DB, updatePassword bool) error {
 
 	newUser := *user
 	updates := map[string]interface{}{
-		"username":              newUser.Username,
-		"display_name":          newUser.DisplayName,
-		"group":                 newUser.Group,
-		"remark":                newUser.Remark,
+		"username":               newUser.Username,
+		"display_name":           newUser.DisplayName,
+		"group":                  newUser.Group,
+		"remark":                 newUser.Remark,
 		"can_manage_redemptions": newUser.CanManageRedemptions,
 	}
 	if updatePassword {

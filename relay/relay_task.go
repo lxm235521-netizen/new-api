@@ -29,6 +29,12 @@ type TaskSubmitResult struct {
 	TaskData       []byte
 	Platform       constant.TaskPlatform
 	Quota          int
+	// Completed 表示上游同步返回了最终结果（图片生成）：控制器直接把任务落成终态，
+	// 不再进轮询。Failed + FailReason 说明这次同步调用是失败的（要退款并留下失败记录）。
+	Completed  bool
+	Failed     bool
+	FailReason string
+	ResultURL  string
 	//PerCallPrice   types.PriceData
 }
 
@@ -153,6 +159,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 	adaptor := GetTaskAdaptor(platform)
 	if adaptor == nil {
+		common.SysLog("[DEBUG] task adaptor nil, platform=" + string(platform))
 		return nil, service.TaskErrorWrapperLocal(fmt.Errorf("invalid api platform: %s", platform), "invalid_api_platform", http.StatusBadRequest)
 	}
 	adaptor.Init(info)
@@ -173,9 +180,14 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		return nil, service.TaskErrorWrapperLocal(err, "model_mapping_failed", http.StatusBadRequest)
 	}
 
-	// 3. 预生成公开 task ID（仅首次）
+	// 3. 预生成公开 task ID（仅首次）。
+	// 异步图片这类场景会在回执里先把 ID 给客户端，这里沿用同一个，保证前后一致。
 	if info.PublicTaskID == "" {
-		info.PublicTaskID = model.GenerateTaskID()
+		if publicID := c.GetString("task_public_id"); publicID != "" {
+			info.PublicTaskID = publicID
+		} else {
+			info.PublicTaskID = model.GenerateTaskID()
+		}
 	}
 
 	// 4. 价格计算：基础模型价格
@@ -251,12 +263,30 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		info.PriceData.Quota = finalQuota
 	}
 
-	return &TaskSubmitResult{
+	result := &TaskSubmitResult{
 		UpstreamTaskID: upstreamTaskID,
 		TaskData:       taskData,
 		Platform:       platform,
 		Quota:          finalQuota,
-	}, nil
+	}
+
+	// 同步上游（图片生成）：提交即拿到最终结果，控制器直接落终态
+	if syncAdaptor, ok := adaptor.(channel.SyncTaskAdaptor); ok && syncAdaptor.SyncCompletedOnSubmit() {
+		result.Completed = true
+		if url, exists := c.Get(relaycommon.ContextKeyTaskResultURL); exists {
+			if urlStr, ok := url.(string); ok {
+				result.ResultURL = urlStr
+			}
+		}
+		if reason, exists := c.Get(relaycommon.ContextKeyTaskFailReason); exists {
+			if reasonStr, ok := reason.(string); ok && reasonStr != "" {
+				result.Failed = true
+				result.FailReason = reasonStr
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
@@ -553,12 +583,27 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		data = common.StripTaskSensitiveKeys(data)
 	}
 	if task.Status == model.TaskStatusSuccess {
+		// 图片任务用自己的代理路径（语义清楚，也方便前端区分）
 		proxyURL := system_setting.BuildVideoProxyURL(task.TaskID)
+		if task.Platform == TaskPlatformImage {
+			proxyURL = system_setting.BuildImageProxyURL(task.TaskID)
+		}
 		data = common.ReplaceTaskVideoURLs(data, proxyURL)
 		if proxyURL != "" {
 			resultURL = proxyURL
 		}
 	}
+
+	// 提交参数快照单独存列，这里拼回 properties.request 给前端用
+	properties := struct {
+		model.Properties
+		Request *model.TaskRequestSnapshot `json:"request,omitempty"`
+	}{Properties: task.Properties}
+	if !task.RequestSnapshot.IsEmpty() {
+		snapshot := task.RequestSnapshot
+		properties.Request = &snapshot
+	}
+
 	return &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
@@ -577,7 +622,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		StartTime:  task.StartTime,
 		FinishTime: task.FinishTime,
 		Progress:   task.Progress,
-		Properties: task.Properties,
+		Properties: properties,
 		Username:   task.Username,
 		Data:       data,
 	}

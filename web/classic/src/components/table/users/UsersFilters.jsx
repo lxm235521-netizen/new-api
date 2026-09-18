@@ -88,6 +88,15 @@ const UsersFilters = ({
             size='small'
           />
         </div>
+        <div className='relative w-full md:w-40'>
+          <Form.Input
+            field='inviterId'
+            placeholder={t('邀请人ID')}
+            showClear
+            pure
+            size='small'
+          />
+        </div>
         <div className='flex gap-2 w-full md:w-auto'>
           <Button
             type='tertiary'

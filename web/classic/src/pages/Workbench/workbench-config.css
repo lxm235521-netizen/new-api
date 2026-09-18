@@ -1,0 +1,200 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+/* ==========================================================================
+   工作台配置（管理员）
+   颜色全部走 Semi 变量，自动跟随主题与暗色模式。
+   ========================================================================== */
+
+.wbcfg-page {
+  margin-top: 60px;
+  padding: 20px;
+  min-height: calc(100vh - 66px);
+}
+
+.wbcfg-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.wbcfg-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 图片并发/用户：小输入框 + 说明 */
+.wbcfg-concurrency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.wbcfg-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border: 1px dashed var(--semi-color-border);
+  border-radius: 12px;
+  background: var(--semi-color-bg-0);
+}
+
+/* ------------------------------------------------------------------ 列表 */
+
+.wbcfg-list {
+  border: 1px solid var(--semi-color-border);
+  border-radius: 12px;
+  background: var(--semi-color-bg-0);
+  overflow: hidden;
+}
+
+.wbcfg-list__head,
+.wbcfg-list__row {
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 2fr) 70px 90px 110px minmax(120px, 1fr)
+    minmax(120px, 1fr) 120px 130px 84px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.wbcfg-list__head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--semi-color-text-2);
+  background: var(--semi-color-fill-0);
+  border-bottom: 1px solid var(--semi-color-border);
+}
+
+.wbcfg-list__row {
+  font-size: 13px;
+  border-bottom: 1px solid var(--semi-color-border);
+  transition: background 0.15s ease;
+}
+
+.wbcfg-list__row:last-child {
+  border-bottom: none;
+}
+
+.wbcfg-list__row:hover {
+  background: var(--semi-color-fill-0);
+}
+
+.wbcfg-list__model {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbcfg-list__ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* -------------------------------------------------------------- 抽屉内容 */
+
+.wbcfg-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.wbcfg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wbcfg-group__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--semi-color-text-0);
+  padding-left: 8px;
+  border-left: 3px solid var(--semi-color-primary);
+  line-height: 1.2;
+}
+
+.wbcfg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wbcfg-row__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wbcfg-row__hint {
+  font-size: 11px;
+}
+
+.wbcfg-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wbcfg-ref {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wbcfg-ref__name {
+  flex: 1 1 auto;
+  font-size: 13px;
+}
+
+.wbcfg-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------- 窄屏适配 */
+
+@media (max-width: 1200px) {
+  .wbcfg-list__head {
+    display: none;
+  }
+
+  .wbcfg-list__row {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 6px;
+  }
+
+  .wbcfg-list__ops {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

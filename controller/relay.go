@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -577,6 +578,11 @@ func RelayTask(c *gin.Context) {
 		service.LogTaskConsumption(c, relayInfo)
 
 		task := model.InitTask(result.Platform, relayInfo)
+		// 记录提示词与提交参数快照（快照单独一列，见 model.TaskRequestSnapshot）
+		if taskReq, reqErr := relaycommon.GetTaskRequest(c); reqErr == nil {
+			task.Properties.Input = strings.TrimSpace(taskReq.Prompt)
+			task.RequestSnapshot = buildTaskRequestSnapshot(taskReq)
+		}
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
@@ -592,7 +598,34 @@ func RelayTask(c *gin.Context) {
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
-		if insertErr := task.Insert(); insertErr != nil {
+		// 同步上游（图片生成）：提交时就有最终结果，直接落成终态，不进轮询
+		if result.Completed {
+			task.Progress = "100%"
+			task.FinishTime = time.Now().Unix()
+			task.Status = model.TaskStatusSuccess
+			if result.ResultURL != "" {
+				task.PrivateData.ResultURL = result.ResultURL
+			}
+			if result.Failed {
+				task.Status = model.TaskStatusFailure
+				task.FailReason = result.FailReason
+				// 上游失败：把预扣费退回去（视频任务是在轮询的失败分支里退的）
+				if relayInfo.Billing != nil {
+					relayInfo.Billing.Refund(c)
+				}
+			}
+		}
+		if existingTaskID := c.GetString(TaskPlaceholderContextKey); existingTaskID != "" {
+			// 异步图片：提交时已经落过一条「排队中」的占位行，这里补全它
+			// （不能再 Insert，否则会出现两条记录）
+			task.TaskID = existingTaskID
+			if updateErr := task.UpdateFromRelayResult(); updateErr != nil {
+				common.SysError("update placeholder task error: " + updateErr.Error())
+			} else {
+				// 绘图日志里的镜像记录同步补全
+				model.SyncImageTaskToDrawingLog(task)
+			}
+		} else if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
 		}
 	}
@@ -608,6 +641,58 @@ func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}
 	c.JSON(taskErr.StatusCode, taskErr)
+}
+
+// taskSnapshotMaxRefs 每个任务最多快照多少条参考素材 URL
+const taskSnapshotMaxRefs = 12
+
+// trimTaskRefs 规整参考素材 URL。
+//
+// 只保留可回填的公开 URL：base64 data URL 与超长串会撑爆 tasks 表的 json 列，
+// 直接丢弃（前端仅少几个缩略图，不影响播放与计费）。
+func trimTaskRefs(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		item := strings.TrimSpace(value)
+		if item == "" || strings.HasPrefix(item, "data:") || len(item) > 2048 {
+			continue
+		}
+		result = append(result, item)
+		if len(result) >= taskSnapshotMaxRefs {
+			break
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// buildTaskRequestSnapshot 把提交请求里的关键参数抽成任务快照。
+//
+// 提示词单独存在 Properties.Input 里，这里不重复保存；
+// 一个参数都没有时返回零值（TaskRequestSnapshot.IsEmpty() == true）。
+func buildTaskRequestSnapshot(req relaycommon.TaskSubmitReq) model.TaskRequestSnapshot {
+	duration := req.Duration
+	if duration == 0 && strings.TrimSpace(req.Seconds) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(req.Seconds)); err == nil {
+			duration = parsed
+		}
+	}
+
+	return model.TaskRequestSnapshot{
+		Mode:        strings.TrimSpace(req.Mode),
+		Duration:    duration,
+		Resolution:  strings.TrimSpace(req.Resolution),
+		AspectRatio: strings.TrimSpace(req.AspectRatio),
+		Size:        strings.TrimSpace(req.Size),
+		Images:      trimTaskRefs(req.Images),
+		Audios:      trimTaskRefs(req.Audios),
+		Videos:      trimTaskRefs(req.Videos),
+	}
 }
 
 func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError, retryTimes int) bool {

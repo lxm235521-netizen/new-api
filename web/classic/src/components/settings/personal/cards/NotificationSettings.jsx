@@ -271,6 +271,11 @@ const NotificationSettings = ({
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        {
+          key: 'workbench',
+          title: t('视频生成'),
+          description: t('视频生成工作台与任务历史'),
+        },
       ],
     },
     {
@@ -314,6 +319,11 @@ const NotificationSettings = ({
           key: 'setting',
           title: t('系统设置'),
           description: t('系统参数配置'),
+        },
+        {
+          key: 'workbenchConfig',
+          title: t('工作台配置'),
+          description: t('视频生成工作台的模型与参数配置'),
         },
       ],
     },

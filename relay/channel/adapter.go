@@ -81,3 +81,11 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+// SyncTaskAdaptor 用于「上游同步返回结果」的任务类型（例如图片生成）：
+// 一次调用就拿到最终结果，控制器直接把任务落成终态，不再进轮询。
+type SyncTaskAdaptor interface {
+	TaskAdaptor
+	// SyncCompletedOnSubmit 返回 true 表示提交即完成
+	SyncCompletedOnSubmit() bool
+}

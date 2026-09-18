@@ -94,6 +94,7 @@ export interface SearchUsersParams {
   group?: string
   role?: string
   status?: string
+  inviter_id?: string
   p?: number
   page_size?: number
 }

@@ -235,9 +235,11 @@ export const useTaskLogsData = () => {
     let localStartTimestamp = parseInt(Date.parse(start_timestamp) / 1000);
     let localEndTimestamp = parseInt(Date.parse(end_timestamp) / 1000);
     const statusParam = status ? `&status=${encodeURIComponent(status)}` : '';
+    // 图片生成记录属于「绘图日志」，这里把 platform=image 排除掉
+    const excludeImageParam = '&exclude_platform=image';
     let url = isAdminUser
-      ? `/api/task/?p=${page}&page_size=${size}&channel_id=${channel_id}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}`
-      : `/api/task/self?p=${page}&page_size=${size}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}`;
+      ? `/api/task/?p=${page}&page_size=${size}&channel_id=${channel_id}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}${excludeImageParam}`
+      : `/api/task/self?p=${page}&page_size=${size}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}${excludeImageParam}`;
     const res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
