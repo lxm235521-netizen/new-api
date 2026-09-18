@@ -37,8 +37,9 @@ func GetAllTask(c *gin.Context) {
 	}
 
 	items := model.TaskGetAllTasks(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
-	total := model.TaskCountAllTasks(queryParams)
-	pageInfo.SetTotal(int(total))
+	pageInfo.SetTotal(int(taskTotal(items, pageInfo, func() int64 {
+		return model.TaskCountAllTasks(queryParams)
+	})))
 	pageInfo.SetItems(tasksToDto(items, true))
 	common.ApiSuccess(c, pageInfo)
 }
@@ -62,10 +63,21 @@ func GetUserTask(c *gin.Context) {
 	}
 
 	items := model.TaskGetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
-	total := model.TaskCountAllUserTask(userId, queryParams)
-	pageInfo.SetTotal(int(total))
+	pageInfo.SetTotal(int(taskTotal(items, pageInfo, func() int64 {
+		return model.TaskCountAllUserTask(userId, queryParams)
+	})))
 	pageInfo.SetItems(tasksToDto(items, false))
 	common.ApiSuccess(c, pageInfo)
+}
+
+// taskTotal 计算分页总数：这一页没取满就说明已经是最后一页，直接算出来，省一次
+// count(*) 查询。生产库里 tasks 和本服务不在同一台机器，每条 SQL 都是一次跨公网
+// 往返（实测 300ms 起、抖动时 2s），能省则省。
+func taskTotal(items []*model.Task, pageInfo *common.PageInfo, count func() int64) int64 {
+	if len(items) < pageInfo.GetPageSize() {
+		return int64(pageInfo.GetStartIdx() + len(items))
+	}
+	return count()
 }
 
 func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {

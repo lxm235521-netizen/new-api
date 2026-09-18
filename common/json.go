@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 )
@@ -99,7 +100,13 @@ func walkAndReplaceTaskVideoURLs(v any, proxyURL string, parentKey string) {
 	case map[string]any:
 		for key, child := range val {
 			lowerKey := strings.ToLower(key)
-			if isReplaceableTaskVideoURLField(lowerKey, parentKey, val) && isRemoteURLValue(child) {
+			if lowerKey == "b64_json" {
+				// 上游把图直接塞成 base64：一条就 1~3MB，列表接口一次 9 条能到 8MB。
+				// 这里的值全部清空（要图请走代理地址）。
+				val[key] = ""
+				continue
+			}
+			if isReplaceableTaskVideoURLField(lowerKey, parentKey, val) && isReplaceableMediaValue(child) {
 				val[key] = proxyURL
 				continue
 			}
@@ -116,16 +123,21 @@ func isReplaceableTaskVideoURLField(key string, parentKey string, container map[
 	switch key {
 	case "video_url", "download_url":
 		return true
+	case "url", "image_url":
+		// 图片网关常见返回是 {"model":"gpt-image-2","url":"data:image/png;base64,..."}：
+		// 没有 video 字样、父级也不叫 video，只能按「值本身是不是媒体地址」判断
+		if isDataURLValue(container[key]) {
+			return true
+		}
+		return isVideoURLContainer(parentKey, container)
 	case "object":
-		if !isRemoteURLValue(container[key]) {
+		if !isReplaceableMediaValue(container[key]) {
 			return false
 		}
 		_, hasStatus := container["status"]
 		_, hasTaskID := container["task_id"]
 		_, hasProgress := container["progress"]
 		return hasStatus || hasTaskID || hasProgress
-	case "url":
-		return isVideoURLContainer(parentKey, container)
 	default:
 		return false
 	}
@@ -161,6 +173,75 @@ func isRemoteURLValue(v any) bool {
 	}
 	s = strings.TrimSpace(strings.ToLower(s))
 	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
+// isDataURLValue 判断是不是 data:image/...;base64,xxxx 这种内联图片。
+// 这类值动辄 1~3MB，绝不能原样回给前端。
+func isDataURLValue(v any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(strings.ToLower(s)), "data:")
+}
+
+// isReplaceableMediaValue 媒体地址：http(s) 或内联 data URL
+func isReplaceableMediaValue(v any) bool {
+	return isRemoteURLValue(v) || isDataURLValue(v)
+}
+
+// inlineDataURLMinBytes 超过这个长度的 data URL 就认为内联了图片/视频本体
+const inlineDataURLMinBytes = 256
+
+// RedactInlineDataURL 把一个内联 data URL 换成等长的说明文字。
+// 库里留着它没有任何价值（几 MB 的 base64），但会拖慢每一次列表查询。
+func RedactInlineDataURL(value string) string {
+	if len(value) < inlineDataURLMinBytes || !isDataURLValue(value) {
+		return value
+	}
+	mime := "application/octet-stream"
+	if idx := strings.Index(value, ";"); idx > len("data:") {
+		mime = value[len("data:"):idx]
+	}
+	return fmt.Sprintf("data:%s;base64,<inline %d bytes omitted>", mime, len(value))
+}
+
+// RedactInlineDataURLs 递归处理 JSON 里所有内联 data URL 字段
+func RedactInlineDataURLs(data json.RawMessage) json.RawMessage {
+	if len(data) == 0 {
+		return data
+	}
+	var v any
+	if err := Unmarshal(data, &v); err != nil {
+		return data
+	}
+	walkAndRedactInlineDataURLs(v)
+	result, err := Marshal(v)
+	if err != nil {
+		return data
+	}
+	return result
+}
+
+func walkAndRedactInlineDataURLs(v any) {
+	switch val := v.(type) {
+	case map[string]any:
+		for key, child := range val {
+			if s, ok := child.(string); ok {
+				val[key] = RedactInlineDataURL(s)
+				continue
+			}
+			walkAndRedactInlineDataURLs(child)
+		}
+	case []any:
+		for i := range val {
+			if s, ok := val[i].(string); ok {
+				val[i] = RedactInlineDataURL(s)
+				continue
+			}
+			walkAndRedactInlineDataURLs(val[i])
+		}
+	}
 }
 
 // JsonRawMessageToString returns JSON strings as their decoded value and other JSON values as raw text.

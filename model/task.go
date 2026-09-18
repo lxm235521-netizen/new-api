@@ -285,7 +285,10 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	}
 
 	// 获取数据
-	err = query.Omit("channel_id").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
+	// Omit private_data：DTO 里成功任务的 result_url 是用 task_id 现拼的代理地址，
+	// 用不到它；而它可能是几 MB 的内联 base64，每次列表都拉一遍会让接口慢到 5 秒以上
+	// （任务表和生产库不在同一台机器，全表列都要跨公网传）。
+	err = query.Omit("channel_id", "private_data").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
 	if err != nil {
 		return nil
 	}
@@ -332,8 +335,8 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
 	}
 
-	// 获取数据
-	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
+	// 获取数据（同 TaskGetAllUserTask：列表用不到 private_data，且它可能很大）
+	err = query.Omit("private_data").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
 	if err != nil {
 		return nil
 	}

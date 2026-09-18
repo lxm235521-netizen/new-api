@@ -594,6 +594,12 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		}
 	}
 
+	// 兜底：data 是上游原始响应，可能内嵌 base64 图片（渠道直出 data URL 的，一条 1~3MB）。
+	// 列表接口一次 9 条能到 8MB、前端要白等五六秒 —— 超大的原始响应一律不外传。
+	if len(data) > taskDataResponseLimit {
+		data = nil
+	}
+
 	// 提交参数快照单独存列，这里拼回 properties.request 给前端用
 	properties := struct {
 		model.Properties
