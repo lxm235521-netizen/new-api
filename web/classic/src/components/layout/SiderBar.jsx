@@ -49,6 +49,7 @@ const routerMap = {
   task: '/console/task',
   workbench: '/console/video',
   workbenchConfig: '/console/workbench',
+  onlineUse: '/console/online-use',
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
@@ -124,6 +125,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         // 视频与图片都在这个工作台里生成，菜单名要一眼看明白，
         // 另加一组常驻特效（渐变流光文字 + 图标脉冲光环 + 底色微光）吸引点击
         featured: true,
+      },
+      {
+        // 原顶部「在线使用」，主要是 gpt-5.5 这类文本/推理模型的对话页
+        text: t('文本对话'),
+        itemKey: 'onlineUse',
+        to: '/console/online-use',
       },
     ];
 

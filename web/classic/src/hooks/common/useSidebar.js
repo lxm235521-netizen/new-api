@@ -39,6 +39,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     midjourney: true,
     task: true,
     workbench: true,
+    onlineUse: true,
   },
   personal: {
     enabled: true,

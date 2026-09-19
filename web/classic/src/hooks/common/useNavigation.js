@@ -29,7 +29,6 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       docs: true,
       about: true,
       plugins: true,
-      onlineUse: true,
     };
 
     // 使用传入的配置或默认配置
@@ -50,11 +49,6 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         text: t('模型广场'),
         itemKey: 'pricing',
         to: '/pricing',
-      },
-      {
-        text: t('在线使用'),
-        itemKey: 'onlineUse',
-        to: '/online-use',
       },
       ...(docsLink
         ? [

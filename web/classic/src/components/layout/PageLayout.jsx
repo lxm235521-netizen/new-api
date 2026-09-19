@@ -63,6 +63,7 @@ const PageLayout = () => {
     '/console/midjourney',
     '/console/task',
     '/console/video',
+    '/console/online-use',
     '/console/models',
     '/pricing',
   ];
@@ -73,7 +74,8 @@ const PageLayout = () => {
     location.pathname.includes('/console') &&
     !location.pathname.startsWith('/console/chat') &&
     location.pathname !== '/console/playground' &&
-    location.pathname !== '/console/video';
+    location.pathname !== '/console/video' &&
+    location.pathname !== '/console/online-use';
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);

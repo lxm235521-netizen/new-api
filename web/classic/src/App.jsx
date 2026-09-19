@@ -341,6 +341,17 @@ function App() {
             </PrivateRoute>
           }
         />
+        {/* 文本对话（原「在线使用」）：侧边栏入口，控制台内嵌 */}
+        <Route
+          path='/console/online-use'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <OnlineUse />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
         <Route
           path='/console/workbench'
           element={

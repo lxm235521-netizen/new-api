@@ -276,6 +276,11 @@ const NotificationSettings = ({
           title: t('视频/图片生成'),
           description: t('视频生成工作台与任务历史'),
         },
+        {
+          key: 'onlineUse',
+          title: t('文本对话'),
+          description: t('文本与推理模型在线对话'),
+        },
       ],
     },
     {
