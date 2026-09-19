@@ -278,7 +278,7 @@ const NotificationSettings = ({
         },
         {
           key: 'onlineUse',
-          title: t('文本对话'),
+          title: t('模型推理'),
           description: t('文本与推理模型在线对话'),
         },
       ],

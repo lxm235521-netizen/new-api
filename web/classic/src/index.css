@@ -211,28 +211,48 @@ code {
 }
 
 /* ==================== 工作台菜单（视频/图片生成）醒目特效 ==================== */
-/* 底色微光：整条菜单缓慢流动的淡紫蓝底 */
+/* 配色走 CSS 变量，整条菜单上定义、文字与图标继承；默认蓝→紫→粉 */
 .sidebar-nav-item--featured {
-  position: relative;
-  overflow: hidden;
-  background-image: linear-gradient(
+  --wb-tone-bg: linear-gradient(
     100deg,
     rgba(59, 130, 246, 0.12) 0%,
     rgba(139, 92, 246, 0.18) 45%,
     rgba(236, 72, 153, 0.12) 100%
   );
+  --wb-tone-text: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
+  --wb-tone-halo: rgba(139, 92, 246, 0.5);
+  --wb-tone-halo-fade: rgba(139, 92, 246, 0);
+  --wb-tone-ring: rgba(139, 92, 246, 0.35);
+  /* 底色微光：整条菜单缓慢流动 */
+  position: relative;
+  overflow: hidden;
+  background-image: var(--wb-tone-bg);
   background-size: 220% 100%;
   animation: sidebar-featured-sheen 6s ease-in-out infinite;
 }
 
-.sidebar-nav-item--featured:hover {
-  background-color: transparent;
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35);
+/* 模型推理：青 → 蓝 → 紫 */
+.sidebar-nav-item--tone-reason {
+  --wb-tone-bg: linear-gradient(
+    100deg,
+    rgba(6, 182, 212, 0.14) 0%,
+    rgba(59, 130, 246, 0.16) 45%,
+    rgba(139, 92, 246, 0.14) 100%
+  );
+  --wb-tone-text: linear-gradient(90deg, #06b6d4, #3b82f6, #8b5cf6, #06b6d4);
+  --wb-tone-halo: rgba(6, 182, 212, 0.5);
+  --wb-tone-halo-fade: rgba(6, 182, 212, 0);
+  --wb-tone-ring: rgba(6, 182, 212, 0.4);
 }
 
-/* 文字流光：蓝 → 紫 → 粉循环 */
+.sidebar-nav-item--featured:hover {
+  background-color: transparent;
+  box-shadow: 0 0 0 1px var(--wb-tone-ring);
+}
+
+/* 文字流光 */
 .sidebar-nav-label--featured {
-  background-image: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
+  background-image: var(--wb-tone-text);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -277,13 +297,13 @@ code {
 
 @keyframes sidebar-featured-halo {
   0% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5);
+    box-shadow: 0 0 0 0 var(--wb-tone-halo);
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(139, 92, 246, 0);
+    box-shadow: 0 0 0 7px var(--wb-tone-halo-fade);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+    box-shadow: 0 0 0 0 var(--wb-tone-halo-fade);
   }
 }
 

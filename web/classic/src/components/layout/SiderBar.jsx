@@ -128,9 +128,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       },
       {
         // 原顶部「在线使用」，主要是 gpt-5.5 这类文本/推理模型的对话页
-        text: t('文本对话'),
+        text: t('模型推理'),
         itemKey: 'onlineUse',
         to: '/console/online-use',
+        // 和「视频/图片生成」同一套特效，但换成青→蓝→紫的配色以便区分
+        featured: true,
+        tone: 'reason',
       },
     ];
 
@@ -385,6 +388,10 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className={[
           item.className,
           item.featured ? 'sidebar-nav-item--featured' : '',
+          // tone 只作用于整条菜单：配色变量从这里继承给文字和图标
+          item.featured && item.tone
+            ? `sidebar-nav-item--tone-${item.tone}`
+            : '',
         ]
           .filter(Boolean)
           .join(' ')}

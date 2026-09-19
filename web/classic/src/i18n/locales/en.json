@@ -3880,7 +3880,7 @@
     "将永久删除该任务，此操作无法撤销。": "This will permanently delete this task. This action cannot be undone.",
     "视频/图片生成": "Video & Image",
     "视频生成工作台与任务历史": "Video & image generation workbench and task history",
-    "文本对话": "Text Chat",
+    "模型推理": "Reasoning",
     "文本与推理模型在线对话": "Chat with text and reasoning models",
     "至少上传一个参考素材；参考音频和参考视频各自总时长不超过 30 秒。": "At least one reference asset is required. Reference audio and video must not exceed 30 seconds in total.",
     "仅根据提示词生成视频，无需上传参考素材。": "Generate a video from a text prompt only. No reference asset is required.",

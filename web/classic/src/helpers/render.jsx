@@ -67,7 +67,7 @@ import {
   LayoutDashboard,
   TerminalSquare,
   MessageSquare,
-  MessageSquareText,
+  Brain,
   Key,
   BarChart3,
   Image as ImageIcon,
@@ -141,7 +141,7 @@ export function getLucideIcon(key, selected = false) {
     case 'workbench':
       return <Clapperboard {...commonProps} color={iconColor} />;
     case 'onlineUse':
-      return <MessageSquareText {...commonProps} color={iconColor} />;
+      return <Brain {...commonProps} color={iconColor} />;
     case 'workbenchConfig':
       return <SlidersHorizontal {...commonProps} color={iconColor} />;
     case 'topup':

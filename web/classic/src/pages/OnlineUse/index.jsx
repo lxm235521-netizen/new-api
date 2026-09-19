@@ -46,7 +46,7 @@ const OnlineUse = () => {
   const [content, setContent] = useState('');
   const [loaded, setLoaded] = useState(false);
 
-  // 控制台（侧边栏「文本对话」）里顶部栏是固定 64px 的，页面要自己让位并撑满剩余高度；
+  // 控制台（侧边栏「模型推理」）里顶部栏是固定 64px 的，页面要自己让位并撑满剩余高度；
   // 独立页 /online-use 则沿用原来的 pt-[60px] 布局。
   const inConsole = pathname.startsWith('/console');
   const pageClass = inConsole
@@ -100,14 +100,14 @@ const OnlineUse = () => {
         <iframe
           src={content}
           className='w-full flex-1 min-h-0 border-none'
-          title={t('文本对话')}
+          title={t('模型推理')}
           sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
         />
       ) : isHtml ? (
         <iframe
           srcDoc={content}
           className='w-full flex-1 min-h-0 border-none'
-          title={t('文本对话')}
+          title={t('模型推理')}
           sandbox='allow-scripts allow-same-origin allow-downloads allow-popups'
         />
       ) : (

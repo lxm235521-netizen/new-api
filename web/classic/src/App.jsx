@@ -341,7 +341,7 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* 文本对话（原「在线使用」）：侧边栏入口，控制台内嵌 */}
+        {/* 模型推理（原「在线使用」）：侧边栏入口，控制台内嵌 */}
         <Route
           path='/console/online-use'
           element={

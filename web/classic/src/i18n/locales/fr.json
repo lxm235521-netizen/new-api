@@ -3730,7 +3730,7 @@
     "将永久删除该任务，此操作无法撤销。": "Cette action supprimera définitivement cette tâche. Elle est irréversible.",
     "视频/图片生成": "Vidéo & image",
     "视频生成工作台与任务历史": "Espace de travail de génération de vidéos et d'images et historique des tâches",
-    "文本对话": "Chat texte",
+    "模型推理": "Raisonnement",
     "文本与推理模型在线对话": "Dialogue avec les modèles de texte et de raisonnement",
     "至少上传一个参考素材；参考音频和参考视频各自总时长不超过 30 秒。": "Au moins une ressource de référence est requise. L'audio et la vidéo de référence ne doivent pas dépasser 30 secondes au total.",
     "仅根据提示词生成视频，无需上传参考素材。": "Générez une vidéo à partir d'une invite textuelle uniquement. Aucune ressource de référence n'est requise.",
