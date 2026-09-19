@@ -118,9 +118,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
       {
-        text: t('视频生成'),
+        text: t('视频/图片生成'),
         itemKey: 'workbench',
         to: '/console/video',
+        // 视频与图片都在这个工作台里生成，菜单名要一眼看明白，
+        // 另加一组常驻特效（渐变流光文字 + 图标脉冲光环 + 底色微光）吸引点击
+        featured: true,
       },
     ];
 
@@ -340,6 +343,13 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
     const isSelected = selectedKeys.includes(item.itemKey);
     const textColor = isSelected ? SELECTED_COLOR : 'inherit';
+    // featured 项的配色由 CSS 渐变控制，不能再被内联 color 覆盖
+    const labelClassName = [
+      'truncate font-medium text-sm',
+      item.featured ? 'sidebar-nav-label--featured' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     return (
       <Nav.Item
@@ -347,18 +357,30 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey={item.itemKey}
         text={
           <span
-            className='truncate font-medium text-sm'
-            style={{ color: textColor }}
+            className={labelClassName}
+            style={item.featured ? undefined : { color: textColor }}
           >
             {item.text}
           </span>
         }
         icon={
-          <div className='sidebar-icon-container flex-shrink-0'>
+          <div
+            className={[
+              'sidebar-icon-container flex-shrink-0',
+              item.featured ? 'sidebar-icon-container--featured' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             {getLucideIcon(item.itemKey, isSelected)}
           </div>
         }
-        className={item.className}
+        className={[
+          item.className,
+          item.featured ? 'sidebar-nav-item--featured' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       />
     );
   };

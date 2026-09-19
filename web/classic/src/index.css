@@ -210,6 +210,97 @@ code {
   transition: all 0.2s ease;
 }
 
+/* ==================== 工作台菜单（视频/图片生成）醒目特效 ==================== */
+/* 底色微光：整条菜单缓慢流动的淡紫蓝底 */
+.sidebar-nav-item--featured {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    100deg,
+    rgba(59, 130, 246, 0.12) 0%,
+    rgba(139, 92, 246, 0.18) 45%,
+    rgba(236, 72, 153, 0.12) 100%
+  );
+  background-size: 220% 100%;
+  animation: sidebar-featured-sheen 6s ease-in-out infinite;
+}
+
+.sidebar-nav-item--featured:hover {
+  background-color: transparent;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35);
+}
+
+/* 文字流光：蓝 → 紫 → 粉循环 */
+.sidebar-nav-label--featured {
+  background-image: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899, #3b82f6);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  font-weight: 600;
+  animation: sidebar-featured-flow 5s linear infinite;
+}
+
+/* 图标脉冲光环 */
+.sidebar-icon-container--featured {
+  position: relative;
+}
+
+.sidebar-icon-container--featured::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  animation: sidebar-featured-halo 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sidebar-featured-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+@keyframes sidebar-featured-sheen {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes sidebar-featured-halo {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(139, 92, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+}
+
+/* 折叠时只剩图标，去掉整条底色微光 */
+body.sidebar-collapsed .sidebar-nav-item--featured {
+  background-image: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-nav-item--featured,
+  .sidebar-nav-label--featured,
+  .sidebar-icon-container--featured::after {
+    animation: none;
+  }
+}
+
 /* 分割线样式 */
 .sidebar-divider {
   margin: 4px 8px;

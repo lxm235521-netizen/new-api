@@ -243,7 +243,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
         {
           key: 'workbench',
-          title: t('视频生成'),
+          title: t('视频/图片生成'),
           description: t('视频生成工作台与任务历史'),
         },
       ],
