@@ -3989,6 +3989,21 @@
     "使用提示词和参考素材生成图片": "Generate images from prompts and reference assets",
     "与大模型在线对话，内容由管理员在「在线使用」中配置": "Chat with models online; the content is configured by the administrator",
     "兑换码": "Redemption Code",
-    "完整兑换码（32位）": "Full code (32 characters)"
+    "完整兑换码（32位）": "Full code (32 characters)",
+    "请求审计": "Request Audit",
+    "启用请求审计": "Enable request audit",
+    "仅记录匹配的请求，默认关闭": "Only matched requests are recorded; disabled by default",
+    "只记录输入": "Record input only",
+    "开启后不记录模型返回与流式分片": "Skip model responses and stream chunks",
+    "单条上限 (字节)": "Max size per record (bytes)",
+    "0 表示不截断，保留完整输入": "0 means no truncation (full input kept)",
+    "监控用户": "Monitored users",
+    "用户名或用户 ID，逗号分隔，留空表示所有用户": "Username or user ID, comma separated; empty means all users",
+    "监控模型": "Monitored models",
+    "支持 * 通配，不带 * 时按前缀匹配，留空表示所有模型": "Supports * wildcard; without * it matches by prefix; empty means all models",
+    "审计文件目录": "Audit file directory",
+    "保存请求审计设置": "Save request audit settings",
+    "环境变量 PROMPT_AUDIT_* 显式设置时会覆盖此处的配置，便于应急开关。": "Explicit PROMPT_AUDIT_* environment variables override these settings (useful as an emergency switch).",
+    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Requests matching both monitored users and models are appended as JSONL to the log directory; unmatched requests leave no record. The content includes raw user input (sensitive data) - restrict file access and retention."
   }
 }

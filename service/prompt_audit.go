@@ -13,26 +13,31 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	promptAuditSetting "github.com/QuantumNous/new-api/setting/prompt_audit_setting"
 
 	"github.com/gin-gonic/gin"
 )
 
 // 定向请求审计（prompt audit）
 //
-// 默认关闭。仅当 PROMPT_AUDIT_ENABLED=true 且命中 PROMPT_AUDIT_USERS /
-// PROMPT_AUDIT_MODELS 过滤条件时，才把请求/响应正文追加写入 JSONL 文件，
-// 每行一条记录，未命中的请求不会产生任何 IO，也不会写入数据库日志。
+// 默认关闭。仅在启用且命中"监控用户 / 监控模型"过滤条件时，才把请求/响应正文
+// 追加写入 JSONL 文件，每行一条记录；未命中的请求不产生任何 IO，也不会写入
+// 数据库日志。
 //
-// 环境变量：
+// 配置来源有两处，优先级如下：
 //
-//	PROMPT_AUDIT_ENABLED     true/false，默认 false
-//	PROMPT_AUDIT_USERS       逗号分隔，用户名或用户 id；留空表示所有用户
-//	PROMPT_AUDIT_MODELS      逗号分隔模型名，支持 * 通配；不带 * 时按前缀匹配
-//	                         （推理模型常带 -high/-low 等后缀）；留空表示所有模型
-//	PROMPT_AUDIT_FILE        输出文件路径；留空则写入 <LOG_DIR>/prompt-audit-YYYYMMDD.jsonl
-//	PROMPT_AUDIT_MAX_BYTES   单条正文最大字节数，默认 65536，<=0 表示不截断
-//	PROMPT_AUDIT_SKIP_OUTPUT true 表示只记录输入，不记录输出与流式分片
+//  1. 环境变量（显式设置即生效，用于应急开关或自动化部署）：
+//     PROMPT_AUDIT_ENABLED / PROMPT_AUDIT_USERS / PROMPT_AUDIT_MODELS /
+//     PROMPT_AUDIT_MAX_BYTES / PROMPT_AUDIT_SKIP_OUTPUT / PROMPT_AUDIT_FILE
+//  2. 后台设置（系统设置 → 请求审计，仅 root 可见），对应
+//     prompt_audit_setting.enabled / .users / .models / .max_bytes / .skip_output。
+//     保存后由 updateOptionMap 直接刷新内存，无需重启即生效。
 //
+// 过滤规则：用户支持用户名（大小写不敏感）或用户 id；模型支持 * 通配，
+// 不带 * 时按前缀匹配（推理模型常带 -high/-low 等后缀），并同时比对客户端
+// 请求的模型名与映射后的上游模型名。留空表示该类不过滤。
+//
+// 输出文件固定写在 <LOG_DIR>/prompt-audit-YYYYMMDD.jsonl（可用环境变量覆盖）。
 // 注意：文件内容包含用户原始输入，属于敏感数据，请限制文件权限、访问范围与留存时间。
 
 const (
@@ -44,8 +49,6 @@ const (
 	PromptAuditDirectionOutputChunk = "output_chunk"
 )
 
-const defaultPromptAuditMaxBytes = 64 * 1024
-
 type promptAuditConfig struct {
 	enabled    bool
 	userIds    map[int]struct{}
@@ -56,50 +59,103 @@ type promptAuditConfig struct {
 	skipOutput bool
 }
 
+// promptAuditMatchers 是按原始配置字符串缓存的解析结果；配置变更后自动重建。
+type promptAuditMatchers struct {
+	userIds   map[int]struct{}
+	usernames map[string]struct{}
+	models    []string
+}
+
 var (
-	promptAuditOnce sync.Once
-	promptAuditCfg  promptAuditConfig
+	promptAuditMatcherMu    sync.Mutex
+	promptAuditMatcherKey   string
+	promptAuditMatcherCache promptAuditMatchers
 
 	promptAuditFileMu   sync.Mutex
 	promptAuditFile     *os.File
 	promptAuditFilePath string
 )
 
-func loadPromptAuditConfig() promptAuditConfig {
+// getPromptAuditConfig 每次调用都从注册的设置对象读取，因此后台一改即生效。
+// 环境变量只要显式设置就覆盖同名后台配置（便于应急关闭）。
+func getPromptAuditConfig() promptAuditConfig {
+	setting := promptAuditSetting.GetPromptAuditSetting()
+
 	cfg := promptAuditConfig{
-		enabled:    common.GetEnvOrDefaultBool("PROMPT_AUDIT_ENABLED", false),
+		enabled:    setting.Enabled,
 		file:       strings.TrimSpace(os.Getenv("PROMPT_AUDIT_FILE")),
-		maxBytes:   common.GetEnvOrDefault("PROMPT_AUDIT_MAX_BYTES", defaultPromptAuditMaxBytes),
-		skipOutput: common.GetEnvOrDefaultBool("PROMPT_AUDIT_SKIP_OUTPUT", false),
-		userIds:    make(map[int]struct{}),
-		usernames:  make(map[string]struct{}),
+		maxBytes:   setting.MaxBytes,
+		skipOutput: setting.SkipOutput,
 	}
-	for _, item := range strings.Split(os.Getenv("PROMPT_AUDIT_USERS"), ",") {
+	usersRaw := setting.Users
+	modelsRaw := setting.Models
+
+	if value, ok := os.LookupEnv("PROMPT_AUDIT_ENABLED"); ok {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(value)); err == nil {
+			cfg.enabled = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("PROMPT_AUDIT_USERS"); ok && strings.TrimSpace(value) != "" {
+		usersRaw = value
+	}
+	if value, ok := os.LookupEnv("PROMPT_AUDIT_MODELS"); ok && strings.TrimSpace(value) != "" {
+		modelsRaw = value
+	}
+	if value, ok := os.LookupEnv("PROMPT_AUDIT_MAX_BYTES"); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.maxBytes = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("PROMPT_AUDIT_SKIP_OUTPUT"); ok {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(value)); err == nil {
+			cfg.skipOutput = parsed
+		}
+	}
+
+	matchers := getPromptAuditMatchers(usersRaw, modelsRaw)
+	cfg.userIds = matchers.userIds
+	cfg.usernames = matchers.usernames
+	cfg.models = matchers.models
+	return cfg
+}
+
+// getPromptAuditMatchers 解析并缓存过滤条件，避免流式分片逐条重复解析。
+func getPromptAuditMatchers(usersRaw string, modelsRaw string) promptAuditMatchers {
+	cacheKey := usersRaw + "\x00" + modelsRaw
+
+	promptAuditMatcherMu.Lock()
+	defer promptAuditMatcherMu.Unlock()
+
+	if promptAuditMatcherKey == cacheKey && promptAuditMatcherCache.userIds != nil {
+		return promptAuditMatcherCache
+	}
+
+	parsed := promptAuditMatchers{
+		userIds:   make(map[int]struct{}),
+		usernames: make(map[string]struct{}),
+	}
+	for _, item := range strings.Split(usersRaw, ",") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
 		}
 		if userId, err := strconv.Atoi(item); err == nil {
-			cfg.userIds[userId] = struct{}{}
+			parsed.userIds[userId] = struct{}{}
 			continue
 		}
-		cfg.usernames[strings.ToLower(item)] = struct{}{}
+		parsed.usernames[strings.ToLower(item)] = struct{}{}
 	}
-	for _, item := range strings.Split(os.Getenv("PROMPT_AUDIT_MODELS"), ",") {
+	for _, item := range strings.Split(modelsRaw, ",") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
 		}
-		cfg.models = append(cfg.models, strings.ToLower(item))
+		parsed.models = append(parsed.models, strings.ToLower(item))
 	}
-	return cfg
-}
 
-func getPromptAuditConfig() promptAuditConfig {
-	promptAuditOnce.Do(func() {
-		promptAuditCfg = loadPromptAuditConfig()
-	})
-	return promptAuditCfg
+	promptAuditMatcherKey = cacheKey
+	promptAuditMatcherCache = parsed
+	return parsed
 }
 
 // PromptAuditEnabled 供调用方在拼接大字符串前短路判断，避免无谓开销。
@@ -304,7 +360,7 @@ func trimIncompleteTrailingRune(payload []byte) []byte {
 	return payload
 }
 
-// resetPromptAuditForTest 清空懒加载配置与文件句柄，仅供测试使用。
+// resetPromptAuditForTest 清空解析缓存与文件句柄，仅供测试使用。
 func resetPromptAuditForTest() {
 	promptAuditFileMu.Lock()
 	if promptAuditFile != nil {
@@ -314,6 +370,8 @@ func resetPromptAuditForTest() {
 	promptAuditFilePath = ""
 	promptAuditFileMu.Unlock()
 
-	promptAuditOnce = sync.Once{}
-	promptAuditCfg = promptAuditConfig{}
+	promptAuditMatcherMu.Lock()
+	promptAuditMatcherKey = ""
+	promptAuditMatcherCache = promptAuditMatchers{}
+	promptAuditMatcherMu.Unlock()
 }

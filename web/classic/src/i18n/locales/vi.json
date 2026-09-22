@@ -4367,6 +4367,21 @@
     "使用提示词和参考素材生成图片": "Tạo ảnh từ câu lệnh và tư liệu tham chiếu",
     "与大模型在线对话，内容由管理员在「在线使用」中配置": "Trò chuyện trực tuyến với mô hình; nội dung do quản trị viên cấu hình",
     "兑换码": "Mã đổi thưởng",
-    "完整兑换码（32位）": "Mã đầy đủ (32 ký tự)"
+    "完整兑换码（32位）": "Mã đầy đủ (32 ký tự)",
+    "请求审计": "Kiểm toán yêu cầu",
+    "启用请求审计": "Bật kiểm toán yêu cầu",
+    "仅记录匹配的请求，默认关闭": "Chỉ ghi các yêu cầu khớp; mặc định tắt",
+    "只记录输入": "Chỉ ghi đầu vào",
+    "开启后不记录模型返回与流式分片": "Bỏ qua phản hồi mô hình và các đoạn luồng",
+    "单条上限 (字节)": "Giới hạn mỗi bản ghi (byte)",
+    "0 表示不截断，保留完整输入": "0 nghĩa là không cắt (giữ đầy đủ đầu vào)",
+    "监控用户": "Người dùng được theo dõi",
+    "用户名或用户 ID，逗号分隔，留空表示所有用户": "Tên hoặc ID người dùng, cách nhau bằng dấu phẩy; trống là tất cả",
+    "监控模型": "Mô hình được theo dõi",
+    "支持 * 通配，不带 * 时按前缀匹配，留空表示所有模型": "Hỗ trợ * ; không có * thì khớp theo tiền tố; trống là tất cả",
+    "审计文件目录": "Thư mục tệp kiểm toán",
+    "保存请求审计设置": "Lưu cài đặt kiểm toán",
+    "环境变量 PROMPT_AUDIT_* 显式设置时会覆盖此处的配置，便于应急开关。": "Biến môi trường PROMPT_AUDIT_* được đặt rõ ràng sẽ ghi đè cấu hình này (dùng làm công tắc khẩn cấp).",
+    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Các yêu cầu khớp cả người dùng và mô hình được theo dõi sẽ được ghi nối tiếp dạng JSONL vào thư mục log; yêu cầu không khớp không tạo bản ghi nào. Nội dung chứa đầu vào gốc của người dùng (dữ liệu nhạy cảm) — hãy giới hạn quyền truy cập và thời gian lưu."
   }
 }

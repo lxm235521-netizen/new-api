@@ -3839,6 +3839,21 @@
     "使用提示词和参考素材生成图片": "Générez des images à partir de prompts et de références",
     "与大模型在线对话，内容由管理员在「在线使用」中配置": "Discutez en ligne avec les modèles ; le contenu est configuré par l'administrateur",
     "兑换码": "Code d'échange",
-    "完整兑换码（32位）": "Code complet (32 caractères)"
+    "完整兑换码（32位）": "Code complet (32 caractères)",
+    "请求审计": "Audit des requêtes",
+    "启用请求审计": "Activer l'audit des requêtes",
+    "仅记录匹配的请求，默认关闭": "Seules les requêtes correspondantes sont enregistrées ; désactivé par défaut",
+    "只记录输入": "Enregistrer uniquement l'entrée",
+    "开启后不记录模型返回与流式分片": "Ignorer les réponses du modèle et les segments de flux",
+    "单条上限 (字节)": "Taille max par entrée (octets)",
+    "0 表示不截断，保留完整输入": "0 = aucune troncature (entrée complète)",
+    "监控用户": "Utilisateurs surveillés",
+    "用户名或用户 ID，逗号分隔，留空表示所有用户": "Nom d'utilisateur ou ID, séparés par des virgules ; vide = tous",
+    "监控模型": "Modèles surveillés",
+    "支持 * 通配，不带 * 时按前缀匹配，留空表示所有模型": "Prend en charge * ; sans *, correspondance par préfixe ; vide = tous",
+    "审计文件目录": "Répertoire des fichiers d'audit",
+    "保存请求审计设置": "Enregistrer l'audit des requêtes",
+    "环境变量 PROMPT_AUDIT_* 显式设置时会覆盖此处的配置，便于应急开关。": "Les variables PROMPT_AUDIT_* définies explicitement remplacent ces réglages (commutateur d'urgence).",
+    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Les requêtes correspondant aux utilisateurs et modèles surveillés sont ajoutées en JSONL dans le répertoire des logs ; les autres ne laissent aucune trace. Le contenu inclut l'entrée brute de l'utilisateur (données sensibles) : limitez l'accès et la conservation."
   }
 }

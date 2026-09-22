@@ -337,6 +337,11 @@ func UpdateOption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 请求审计设置决定"监控谁"，属于敏感操作，单独留痕便于事后追溯。
+	if strings.HasPrefix(option.Key, "prompt_audit_setting.") {
+		model.RecordLog(c.GetInt("id"), model.LogTypeManage,
+			fmt.Sprintf("更新请求审计设置 %s = %s", option.Key, option.Value.(string)))
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

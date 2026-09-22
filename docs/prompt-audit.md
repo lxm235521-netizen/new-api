@@ -11,6 +11,9 @@
 | 内容 | 位置 |
 |---|---|
 | 审计器本体 | `service/prompt_audit.go` |
+| 配置项（后台可改） | `setting/prompt_audit_setting/prompt_audit_setting.go`，键名 `prompt_audit_setting.*` |
+| 变更留痕 | `controller/option.go`（更新 `prompt_audit_setting.*` 时写一条 `LogTypeManage` 日志） |
+| 后台界面（经典前端） | `web/classic/src/components/settings/PromptAuditSetting.jsx`、`web/classic/src/pages/Setting/Operation/SettingsPromptAudit.jsx`、`web/classic/src/pages/Setting/index.jsx`（「请求审计」tab，仅 root 可见） |
 | 输入钩子（7 处，均为原有 debug 日志旁） | `relay/compatible_handler.go`、`relay/responses_handler.go`、`relay/claude_handler.go`、`relay/gemini_handler.go`、`relay/image_handler.go`、`relay/embedding_handler.go`、`relay/rerank_handler.go` |
 | 输入钩子（透传 passthrough，记录客户端原始 body） | `compatible_handler.go`、`responses_handler.go`、`claude_handler.go`、`gemini_handler.go`、`image_handler.go`、`rerank_handler.go` 的 passthrough 分支，统一走 `service.AuditRequestBodyStorage` |
 | 输入钩子（chat completions → Responses 模式） | `compatible_handler.go`、`claude_handler.go` 的 `chatCompletionsViaResponses` 分支 |
@@ -19,41 +22,46 @@
 
 钩子挂在"请求体已转换完成"的位置，因此记录的是**实际上游请求体**（已包含渠道系统提示词注入与参数覆盖的结果）；若渠道开启 passthrough，则记录**客户端原始请求体**。
 
-## 推荐配置：只监控单个用户 + 单个模型，且保留完整输入
+## 配置方式：后台设置（推荐）
 
-```yaml
-      - PROMPT_AUDIT_ENABLED=true
-      - PROMPT_AUDIT_USERS=ccx            # 用户名（也可用逗号分隔的用户 id，如 42）
-      - PROMPT_AUDIT_MODELS=gemini-3.1-pro*   # 前缀匹配，可同时覆盖 -preview / -high 等后缀
-      - PROMPT_AUDIT_FILE=/app/logs/prompt-audit-ccx.jsonl
-      - PROMPT_AUDIT_MAX_BYTES=0          # 0 或负数 = 不截断，保留完整输入
-```
+登录 root → **系统设置 → 请求审计**，可配置：
 
-`PROMPT_AUDIT_MODELS` 会同时比对客户端请求的模型名（`OriginModelName`）与映射后的上游模型名（`UpstreamModelName`），大小写不敏感；带 `*` 按通配匹配，不带 `*` 按前缀匹配。
-
-`PROMPT_AUDIT_MAX_BYTES=0` 时正文完整落盘，代价是**含 base64 图片/音频/大文件的长上下文请求会产生很大的单行记录**，建议配合磁盘监控与定期清理；如果只想看文本，可设成 `2097152`（2MB）之类的上限。
-
-## 环境变量
-
-| 变量 | 默认值 | 说明 |
+| 表单项 | 选项键 | 说明 |
 |---|---|---|
-| `PROMPT_AUDIT_ENABLED` | `false` | 总开关 |
-| `PROMPT_AUDIT_USERS` | 空（所有用户） | 逗号分隔，用户名或用户 id |
-| `PROMPT_AUDIT_MODELS` | 空（所有模型） | 逗号分隔；支持 `*` 通配；不带 `*` 时按前缀匹配（推理模型常带 `-high`/`-low` 后缀） |
-| `PROMPT_AUDIT_FILE` | `<LOG_DIR>/prompt-audit-YYYYMMDD.jsonl` | 输出文件路径，按天分文件 |
-| `PROMPT_AUDIT_MAX_BYTES` | `65536` | 单条正文最大字节数，`<=0` 表示不截断 |
-| `PROMPT_AUDIT_SKIP_OUTPUT` | `false` | `true` 时只记输入，不记输出与流式分片 |
+| 启用请求审计 | `prompt_audit_setting.enabled` | 总开关，默认关闭 |
+| 监控用户 | `prompt_audit_setting.users` | 用户名或用户 id，逗号分隔，留空=所有用户 |
+| 监控模型 | `prompt_audit_setting.models` | 逗号分隔，支持 `*` 通配，不带 `*` 按前缀匹配，留空=所有模型 |
+| 单条上限 (字节) | `prompt_audit_setting.max_bytes` | `0` = 不截断（完整输入） |
+| 只记录输入 | `prompt_audit_setting.skip_output` | 开启后不记输出与流式分片 |
 
-示例（docker-compose）：
+保存后由 `updateOptionMap` 直接刷新内存，**无需重启容器**；每次修改都会写入一条管理日志，便于追溯"谁在什么时候监控了谁"。
 
-```yaml
-environment:
-  - PROMPT_AUDIT_ENABLED=true
-  - PROMPT_AUDIT_USERS=alice,42
-  - PROMPT_AUDIT_MODELS=gemini-3.1-pro*,claude-sonnet*
-  - PROMPT_AUDIT_FILE=/data/logs/prompt-audit.jsonl
-  - PROMPT_AUDIT_MAX_BYTES=65536
+只想监控单个用户 + 单个模型的完整输入，填：
+
 ```
+启用请求审计：开
+监控用户：ccx
+监控模型：gemini-3.1-pro*
+单条上限：0
+```
+
+`监控模型` 会同时比对客户端请求的模型名（`OriginModelName`）与映射后的上游模型名（`UpstreamModelName`），大小写不敏感。
+
+`单条上限=0` 时正文完整落盘，代价是**含 base64 图片/音频/大文件的长上下文请求会产生很大的单行记录**，建议配合磁盘监控与定期清理；如果只想看文本，可填 `2097152`（2MB）之类的上限。
+
+## 环境变量（应急覆盖）
+
+环境变量**只要显式设置**就覆盖同名后台设置，用于应急开关或自动化部署；生产建议只留后台配置。
+
+| 变量 | 覆盖的选项 | 说明 |
+|---|---|---|
+| `PROMPT_AUDIT_ENABLED` | `enabled` | `true`/`false` |
+| `PROMPT_AUDIT_USERS` | `users` | 非空时生效，逗号分隔 |
+| `PROMPT_AUDIT_MODELS` | `models` | 非空时生效，逗号分隔 |
+| `PROMPT_AUDIT_MAX_BYTES` | `max_bytes` | `<=0` 表示不截断 |
+| `PROMPT_AUDIT_SKIP_OUTPUT` | `skip_output` | `true` 时只记输入 |
+| `PROMPT_AUDIT_FILE` | — | 输出文件路径；默认 `<LOG_DIR>/prompt-audit-YYYYMMDD.jsonl` |
+
 
 ## 输出格式
 
@@ -107,7 +115,7 @@ jq -r 'select(.direction=="output_chunk") | .payload' prompt-audit.jsonl | grep 
 
 ## 验证记录
 
-已在隔离环境（独立容器 + SQLite + 模拟上游，不接触线上库/线上容器）完成端到端验证，79 项断言全部通过：
+已在隔离环境（独立容器 + SQLite + 模拟上游，不接触线上库/线上容器）完成端到端验证，100 项断言全部通过：
 
 | 场景 | 覆盖点 | 结果 |
 |---|---|---|
@@ -116,6 +124,9 @@ jq -r 'select(.direction=="output_chunk") | .payload' prompt-audit.jsonl | grep 
 | 用户过滤 + 超长截断 | `PROMPT_AUDIT_USERS=root` 时其他用户的请求成功但零记录；`PROMPT_AUDIT_MAX_BYTES=64` 时 `truncated=true`、`payload_bytes` 保留原长、尾部不入库 | 17 PASS |
 | 渠道 passthrough + 不截断 | `setting={"pass_through_body_enabled":true}` 时落盘为**客户端原始 body**（`messages` 而非 `contents`）；`PROMPT_AUDIT_MAX_BYTES=0` 时 2116 字节正文完整落盘、`truncated=false`、尾部标记仍在 | 15 PASS |
 | 透传钩子回归 | 透传渠道下用户过滤仍生效：root 完整记录、其他用户请求成功但零记录 | 11 PASS |
+| 后台设置驱动（无任何环境变量） | 通过 `PUT /api/option/` 写 `prompt_audit_setting.*` 后**不重启即生效**；只记录监控用户、非监控用户零记录、完整输入落盘、输出同时记录；关闭后立即停止；5 次设置变更各留一条管理日志；重启后环境变量可覆盖后台配置 | 21 PASS |
+
+其中「后台设置驱动」这一轮与页面保存走的是同一个接口（`PUT /api/option/`），经典前端页面本身通过 `rsbuild build` 全量构建验证。
 
 复现要点（用管理接口搭建环境时容易踩的坑）：
 
