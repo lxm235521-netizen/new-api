@@ -28,15 +28,25 @@ type Redemption struct {
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
 }
 
-func GetRedemptionAudit(userId int, isAdmin bool, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+// GetRedemptionAudit 查询兑换码列表。key 为用户输入的兑换码（已去空格并转小写），
+// 非空时按兑换码精确匹配；此时结果中会带出兑换码本身，便于直接核对。
+func GetRedemptionAudit(userId int, isAdmin bool, key string, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+	selectColumns := "redemptions.id, redemptions.user_id, redemptions.status, redemptions.name, redemptions.quota, redemptions.created_time, redemptions.redeemed_time, redemptions.used_user_id, redemptions.expired_time, creator.username AS creator_name, used_user.username AS used_user_name"
+	// 列表默认不下发兑换码本身，仅在按兑换码查询时返回，避免整页兑换码被批量带出
+	if key != "" {
+		selectColumns = "redemptions." + commonKeyCol + ", " + selectColumns
+	}
 	query := DB.Model(&Redemption{}).
-		Select("redemptions.id, redemptions.user_id, redemptions.status, redemptions.name, redemptions.quota, redemptions.created_time, redemptions.redeemed_time, redemptions.used_user_id, redemptions.expired_time, creator.username AS creator_name, used_user.username AS used_user_name").
+		Select(selectColumns).
 		Joins("JOIN users AS creator ON creator.id = redemptions.user_id").
 		Joins("LEFT JOIN users AS used_user ON used_user.id = redemptions.used_user_id")
 	if !isAdmin {
 		query = query.Where("redemptions.user_id = ?", userId)
 	} else if creatorId > 0 {
 		query = query.Where("redemptions.user_id = ?", creatorId)
+	}
+	if key != "" {
+		query = query.Where("redemptions."+commonKeyCol+" = ?", key)
 	}
 	if creatorName != "" {
 		query = query.Where("creator.username LIKE ? OR creator.display_name LIKE ?", "%"+creatorName+"%", "%"+creatorName+"%")
@@ -157,7 +167,7 @@ func DeleteRedemptionsForAudit(ids []int, userId int, isAdmin bool) (deletedIds 
 	return deletedIds, rejected, nil
 }
 
-func GetRedemptionAuditStat(userId int, isAdmin bool, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int) (stat RedemptionAuditStat, err error) {
+func GetRedemptionAuditStat(userId int, isAdmin bool, key string, creatorId int, creatorName string, usedUserId int, usedUserName string, startTimestamp int64, endTimestamp int64, status int) (stat RedemptionAuditStat, err error) {
 	query := DB.Model(&Redemption{}).
 		Select(`
 			COALESCE(SUM(redemptions.quota), 0) AS created_quota,
@@ -177,6 +187,9 @@ func GetRedemptionAuditStat(userId int, isAdmin bool, creatorId int, creatorName
 		query = query.Where("redemptions.user_id = ?", userId)
 	} else if creatorId > 0 {
 		query = query.Where("redemptions.user_id = ?", creatorId)
+	}
+	if key != "" {
+		query = query.Where("redemptions."+commonKeyCol+" = ?", key)
 	}
 	if creatorName != "" {
 		query = query.Where("creator.username LIKE ? OR creator.display_name LIKE ?", "%"+creatorName+"%", "%"+creatorName+"%")

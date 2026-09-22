@@ -6,14 +6,19 @@ import { Button, Card, Form, Modal, Space, Table, Tag, Typography } from '@douyi
 
 const { Text, Title } = Typography;
 
+// 兑换码脱敏展示：保留前 8 位与后 8 位，中间以 * 占位
+const maskRedemptionKey = (key) =>
+  key.length > 16 ? `${key.slice(0, 8)}${'*'.repeat(16)}${key.slice(-8)}` : key;
+
 const Audit = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0 });
   const [stat, setStat] = useState({});
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ start: null, end: null, creatorId: '', creatorName: '', usedUserId: '', usedUserName: '', status: '' });
+  const [filters, setFilters] = useState({ key: '', start: null, end: null, creatorId: '', creatorName: '', usedUserId: '', usedUserName: '', status: '' });
   const [selectedRows, setSelectedRows] = useState([]);
+  const [revealedKeys, setRevealedKeys] = useState({});
   const [editingRedemption, setEditingRedemption] = useState({ id: undefined });
   const [showCreate, setShowCreate] = useState(false);
 
@@ -23,6 +28,7 @@ const Audit = () => {
       params.set('p', page);
       params.set('page_size', 10);
     }
+    if (filters.key) params.set('key', filters.key);
     if (filters.start) params.set('start_timestamp', Math.floor(filters.start.getTime() / 1000));
     if (filters.end) params.set('end_timestamp', Math.floor(filters.end.getTime() / 1000) + 86399);
     if (filters.creatorId) params.set('creator_id', filters.creatorId);
@@ -44,6 +50,7 @@ const Audit = () => {
       setData(listRes.data.data);
       setStat(statRes.data.data || {});
       setSelectedRows([]);
+      setRevealedKeys({});
     } catch (e) {
       showError(e.message);
     } finally {
@@ -54,6 +61,24 @@ const Audit = () => {
   useEffect(() => { load(); }, [page, filters]);
 
   const refresh = () => load();
+
+  // 列表默认不下发兑换码，需要时按需拉取
+  const revealCodes = async (rows) => {
+    if (rows.length === 0) return;
+    try {
+      const response = await API.post('/api/redemption/audit/keys', {
+        ids: rows.map((row) => row.id),
+      });
+      if (!response.data.success) throw new Error(response.data.message);
+      const revealed = {};
+      (response.data.data || []).forEach((item) => {
+        revealed[item.id] = item.key;
+      });
+      setRevealedKeys((prev) => ({ ...prev, ...revealed }));
+    } catch (e) {
+      showError(e.message);
+    }
+  };
 
   const copyKeys = async (rows) => {
     if (rows.length === 0) {
@@ -117,6 +142,21 @@ const Audit = () => {
 
   const columns = [
     { title: t('名称'), dataIndex: 'name' },
+    {
+      title: t('兑换码'),
+      dataIndex: 'key',
+      render: (value, record) => {
+        const code = value || revealedKeys[record.id];
+        if (!code) {
+          return <Button size='small' onClick={() => revealCodes([record])}>{t('查看')}</Button>;
+        }
+        return (
+          <Text code copyable={{ text: code }}>
+            {maskRedemptionKey(code)}
+          </Text>
+        );
+      },
+    },
     { title: t('创建者 ID'), dataIndex: 'user_id' },
     { title: t('创建者账户'), dataIndex: 'creator_name', render: (value) => value || '-' },
     { title: t('额度'), dataIndex: 'quota', render: (value) => renderQuota(value) },
@@ -144,6 +184,7 @@ const Audit = () => {
   const applyFilters = (values) => {
     setPage(1);
     setFilters({
+      key: (values.key || '').trim(),
       start: values.range?.[0] || null,
       end: values.range?.[1] || null,
       creatorId: values.creator_id || '',
@@ -166,6 +207,7 @@ const Audit = () => {
       </div>
       <Card className='mb-3'>
         <Form layout='horizontal' onSubmit={applyFilters} initValues={{ status: '' }}>
+          <Form.Input field='key' label={t('兑换码')} placeholder={t('完整兑换码（32位）')} style={{ width: 300 }} />
           <Form.DatePicker field='range' type='dateRange' label={t('创建时间')} style={{ width: 260 }} />
           <Form.Input field='creator_id' label={t('创建者 ID')} placeholder={t('管理员可筛选')} />
           <Form.Input field='creator_name' label={t('创建者名称')} placeholder={t('用户名或显示名称')} />

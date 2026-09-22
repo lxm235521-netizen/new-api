@@ -36,3 +36,7 @@ data/
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+
+# 黑马助手单页前端（本地文件，不入库、不推送）
+/index2.html
+/.heima-build/

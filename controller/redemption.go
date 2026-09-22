@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -16,6 +17,7 @@ import (
 
 func GetRedemptionAudit(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
+	key := normalizeRedemptionKey(c.Query("key"))
 	creatorId, _ := strconv.Atoi(c.Query("creator_id"))
 	creatorName := c.Query("creator_name")
 	usedUserId, _ := strconv.Atoi(c.Query("used_user_id"))
@@ -24,7 +26,11 @@ func GetRedemptionAudit(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	isAdmin := c.GetInt("role") >= common.RoleAdminUser
-	redemptions, total, err := model.GetRedemptionAudit(c.GetInt("id"), isAdmin, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if key != "" {
+		// 兑换码查询结果包含兑换码本身，禁止中间层缓存
+		c.Header("Cache-Control", "no-store")
+	}
+	redemptions, total, err := model.GetRedemptionAudit(c.GetInt("id"), isAdmin, key, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -35,6 +41,7 @@ func GetRedemptionAudit(c *gin.Context) {
 }
 
 func GetRedemptionAuditStat(c *gin.Context) {
+	key := normalizeRedemptionKey(c.Query("key"))
 	creatorId, _ := strconv.Atoi(c.Query("creator_id"))
 	creatorName := c.Query("creator_name")
 	usedUserId, _ := strconv.Atoi(c.Query("used_user_id"))
@@ -43,12 +50,19 @@ func GetRedemptionAuditStat(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	isAdmin := c.GetInt("role") >= common.RoleAdminUser
-	stat, err := model.GetRedemptionAuditStat(c.GetInt("id"), isAdmin, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status)
+	stat, err := model.GetRedemptionAuditStat(c.GetInt("id"), isAdmin, key, creatorId, creatorName, usedUserId, usedUserName, startTimestamp, endTimestamp, status)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, stat)
+}
+
+// normalizeRedemptionKey 归一化查询用的兑换码：去掉粘贴时带入的空白并转小写。
+// 兑换码本身由 GetUUID 生成，固定为 32 位小写十六进制；统一转小写可避免
+// MySQL 不区分大小写、PostgreSQL/SQLite 区分大小写导致的跨库行为差异。
+func normalizeRedemptionKey(key string) string {
+	return strings.ToLower(strings.TrimSpace(key))
 }
 
 type redemptionAuditIdsRequest struct {

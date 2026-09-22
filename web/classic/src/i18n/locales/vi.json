@@ -4365,6 +4365,8 @@
     "推理模型": "Mô hình suy luận",
     "历史任务": "Lịch sử tác vụ",
     "使用提示词和参考素材生成图片": "Tạo ảnh từ câu lệnh và tư liệu tham chiếu",
-    "与大模型在线对话，内容由管理员在「在线使用」中配置": "Trò chuyện trực tuyến với mô hình; nội dung do quản trị viên cấu hình"
+    "与大模型在线对话，内容由管理员在「在线使用」中配置": "Trò chuyện trực tuyến với mô hình; nội dung do quản trị viên cấu hình",
+    "兑换码": "Mã đổi thưởng",
+    "完整兑换码（32位）": "Mã đầy đủ (32 ký tự)"
   }
 }
