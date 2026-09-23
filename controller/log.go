@@ -112,14 +112,20 @@ func GetLogsStat(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+		redeemQuota, err := model.SumRedeemedQuota(startTimestamp, endTimestamp, username, inviterId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "",
 			"data": gin.H{
-				"quota":       0,
-				"rpm":         0,
-				"tpm":         0,
-				"topup_money": money,
+				"quota":        0,
+				"rpm":          0,
+				"tpm":          0,
+				"topup_money":  money,
+				"redeem_quota": redeemQuota,
 			},
 		})
 		return
@@ -158,14 +164,20 @@ func GetLogsSelfStat(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+		redeemQuota, err := model.SumUserRedeemedQuota(userId, startTimestamp, endTimestamp)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "",
 			"data": gin.H{
-				"quota":       0,
-				"rpm":         0,
-				"tpm":         0,
-				"topup_money": money,
+				"quota":        0,
+				"rpm":          0,
+				"tpm":          0,
+				"topup_money":  money,
+				"redeem_quota": redeemQuota,
 			},
 		})
 		return

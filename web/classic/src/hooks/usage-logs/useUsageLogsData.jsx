@@ -92,6 +92,7 @@ export const useLogsData = () => {
     rpm: 0,
     tpm: 0,
     topup_money: 0,
+    redeem_quota: 0,
   });
 
   // Form state

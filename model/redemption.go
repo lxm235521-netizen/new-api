@@ -213,6 +213,54 @@ func GetRedemptionAuditStat(userId int, isAdmin bool, key string, creatorId int,
 	return stat, err
 }
 
+// SumRedeemedQuota 统计时间范围内通过兑换码实际充值到账的额度，供使用日志的充值统计使用。
+// 兑换码充值不经过支付渠道，因此不会写入 top_ups 表，必须单独从 redemptions 表统计。
+// 时间口径使用 redeemed_time（兑换动作发生的时间），与日志列表的 created_at 对齐。
+func SumRedeemedQuota(startTimestamp int64, endTimestamp int64, username string, inviterId int) (quota int64, err error) {
+	tx := DB.Model(&Redemption{}).
+		Select("COALESCE(SUM(redemptions.quota), 0)").
+		Where("redemptions.status = ?", common.RedemptionCodeStatusUsed)
+	if startTimestamp != 0 {
+		tx = tx.Where("redemptions.redeemed_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("redemptions.redeemed_time <= ?", endTimestamp)
+	}
+	// 充值统计按“充值到账的用户”归属，兑换码的到账用户是 used_user_id
+	if username != "" || inviterId > 0 {
+		tx = tx.Joins("JOIN users ON users.id = redemptions.used_user_id")
+	}
+	if tx, err = applyExplicitLogTextFilter(tx, "users.username", username); err != nil {
+		return 0, err
+	}
+	if inviterId > 0 {
+		tx = tx.Where("users.inviter_id = ?", inviterId)
+	}
+	if err = tx.Scan(&quota).Error; err != nil {
+		common.SysError("failed to query redeemed quota stat: " + err.Error())
+		return 0, errors.New("查询充值统计数据失败")
+	}
+	return quota, nil
+}
+
+// SumUserRedeemedQuota 统计某个用户在时间范围内通过兑换码实际充值到账的额度。
+func SumUserRedeemedQuota(userId int, startTimestamp int64, endTimestamp int64) (quota int64, err error) {
+	tx := DB.Model(&Redemption{}).
+		Select("COALESCE(SUM(redemptions.quota), 0)").
+		Where("redemptions.used_user_id = ? AND redemptions.status = ?", userId, common.RedemptionCodeStatusUsed)
+	if startTimestamp != 0 {
+		tx = tx.Where("redemptions.redeemed_time >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("redemptions.redeemed_time <= ?", endTimestamp)
+	}
+	if err = tx.Scan(&quota).Error; err != nil {
+		common.SysError("failed to query user redeemed quota stat: " + err.Error())
+		return 0, errors.New("查询充值统计数据失败")
+	}
+	return quota, nil
+}
+
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
 	// 开始事务
 	tx := DB.Begin()

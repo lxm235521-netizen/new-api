@@ -62,6 +62,19 @@ const LogsActions = ({
               ? Number(stat.topup_money || 0).toFixed(2)
               : renderQuota(stat.quota)}
           </Tag>
+          {isTopupLog && (
+            <Tag
+              color='orange'
+              style={{
+                fontWeight: 500,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                padding: 13,
+              }}
+              className='!rounded-lg'
+            >
+              {t('兑换码充值额度')}: {renderQuota(stat.redeem_quota || 0)}
+            </Tag>
+          )}
           {!isTopupLog && (
             <Tag
               color='pink'
