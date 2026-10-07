@@ -72,6 +72,10 @@ func SetApiRouter(router *gin.Engine) {
 		workbenchRoute.Use(middleware.UserAuth())
 		{
 			workbenchRoute.GET("/models", controller.GetWorkbenchModels)
+			// 参考素材上传：由服务端带鉴权转发到图床（图床不开 CORS，浏览器不能直传）。
+			// 刻意不加 UploadRateLimit：它是按 IP 的 10 次/分钟，而工作台一次可并发传
+			// 9 张图，同 NAT 的用户还会共用桶，加了必然误伤；图床自身有配额兜底。
+			workbenchRoute.POST("/upload", controller.UploadWorkbenchMedia)
 		}
 
 		userRoute := apiRouter.Group("/user")

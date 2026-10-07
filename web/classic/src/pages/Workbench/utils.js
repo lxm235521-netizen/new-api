@@ -30,7 +30,25 @@ export const WORKBENCH_OPTION_KEY = 'workbench_setting.models';
 // 异步图片生成时「单个用户同时可跑几张」（0 = 不限）
 export const IMAGE_CONCURRENCY_OPTION_KEY =
   'workbench_setting.async_image_per_user';
+// 参考素材图床：素材先POST到本服务，再由服务端带鉴权转发（图床不开 CORS）
+export const MEDIA_UPLOAD_OPTION_KEY = 'workbench_setting.media_upload';
 export const PER_CALL_OPTION_KEY = 'task_per_call_billing_setting.model_names';
+
+/** 解析图床配置；没有该选项或格式异常时返回 null（表示沿用服务端默认值） */
+export function parseMediaUploadOption(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      endpoint: typeof parsed.endpoint === 'string' ? parsed.endpoint : '',
+      token: typeof parsed.token === 'string' ? parsed.token : '',
+      plain_text_response: parsed.plain_text_response !== false,
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** 图片类端点：命中则认为该模型属于「图片」分组 */
 export const IMAGE_ENDPOINT = 'image-generation';

@@ -32,6 +32,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
+  Input,
   InputNumber,
   Select,
   Spin,
@@ -44,12 +45,14 @@ import ModelEditor from './components/ModelEditor';
 import {
   IMAGE_CONCURRENCY_OPTION_KEY,
   IMAGE_ENDPOINT,
+  MEDIA_UPLOAD_OPTION_KEY,
   PER_CALL_OPTION_KEY,
   WORKBENCH_OPTION_KEY,
   describeDuration,
   fromDraft,
   newDraft,
   parseList,
+  parseMediaUploadOption,
   toDraft,
 } from './utils';
 import './workbench-config.css';
@@ -80,6 +83,12 @@ const WorkbenchConfig = () => {
   const [draft, setDraft] = useState(null);
   // 异步图片生成：每个用户同时能跑几张（0 = 不限）
   const [imageConcurrency, setImageConcurrency] = useState(2);
+  // 参考素材图床（服务端转发用）。endpoint 留空 = 关闭参考素材上传
+  const [mediaUpload, setMediaUpload] = useState({
+    endpoint: '',
+    token: '',
+    plain_text_response: true,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +112,11 @@ const WorkbenchConfig = () => {
           findOption(IMAGE_CONCURRENCY_OPTION_KEY) ?? 2,
         );
         setImageConcurrency(Number.isFinite(concurrency) ? concurrency : 2);
+        // 选项里已带服务端注册的默认值；缺失时保持空白（不覆盖服务端默认）
+        const media = parseMediaUploadOption(
+          findOption(MEDIA_UPLOAD_OPTION_KEY),
+        );
+        if (media) setMediaUpload(media);
         setDirty(false);
 
         const enabled = enabledRes.data?.data;
@@ -218,7 +232,7 @@ const WorkbenchConfig = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const [modelsRes, concurrencyRes] = await Promise.all([
+      const [modelsRes, concurrencyRes, mediaRes] = await Promise.all([
         API.put('/api/option/', {
           key: WORKBENCH_OPTION_KEY,
           value: JSON.stringify(items),
@@ -227,8 +241,20 @@ const WorkbenchConfig = () => {
           key: IMAGE_CONCURRENCY_OPTION_KEY,
           value: String(imageConcurrency),
         }),
+        API.put('/api/option/', {
+          key: MEDIA_UPLOAD_OPTION_KEY,
+          value: JSON.stringify({
+            endpoint: mediaUpload.endpoint.trim(),
+            token: mediaUpload.token.trim(),
+            plain_text_response: mediaUpload.plain_text_response !== false,
+          }),
+        }),
       ]);
-      if (modelsRes.data?.success && concurrencyRes.data?.success) {
+      if (
+        modelsRes.data?.success &&
+        concurrencyRes.data?.success &&
+        mediaRes.data?.success
+      ) {
         showSuccess(t('保存成功'));
         setDirty(false);
       } else {
@@ -309,6 +335,41 @@ const WorkbenchConfig = () => {
             {dirty ? t('保存配置') : t('已保存')}
           </Button>
         </div>
+      </div>
+
+      {/* 参考素材图床：素材先POST到本服务，再由服务端带鉴权转发。
+          图床不返回任何 CORS 头，浏览器直传必被拦下；顺带的好处是
+          Token 只留在服务端，不会出现在前端产物里。 */}
+      <div className='wbcfg-mediabed'>
+        <Text size='small' type='tertiary'>
+          {t('参考素材图床')}
+        </Text>
+        <Input
+          value={mediaUpload.endpoint}
+          size='small'
+          disabled={loading}
+          placeholder={t('图床上传接口，留空则关闭参考素材上传')}
+          onChange={(value) => {
+            setMediaUpload((prev) => ({ ...prev, endpoint: value }));
+            setDirty(true);
+          }}
+          style={{ width: 320 }}
+        />
+        <Input
+          value={mediaUpload.token}
+          size='small'
+          mode='password'
+          disabled={loading}
+          placeholder={t('图床鉴权串（Authorization）')}
+          onChange={(value) => {
+            setMediaUpload((prev) => ({ ...prev, token: value }));
+            setDirty(true);
+          }}
+          style={{ width: 240 }}
+        />
+        <Text size='small' type='tertiary'>
+          {t('浏览器不直接访问图床，由服务端转发上传')}
+        </Text>
       </div>
 
       <Spin spinning={loading}>

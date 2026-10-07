@@ -64,6 +64,28 @@ type WorkbenchPromptOptimize struct {
 	SystemPrompt string `json:"system_prompt"`
 }
 
+// 工作台参考素材图床的默认值。
+//
+// 图床（Zipline）不返回任何 CORS 响应头，浏览器直传会被拦下，
+// 因此素材统一先POST到本服务的 /api/workbench/upload，
+// 再由服务端带上鉴权转发给图床。Token 只存在于服务端。
+const (
+	DefaultWorkbenchMediaUploadEndpoint = "https://files.mmg.lat/api/upload"
+	DefaultWorkbenchMediaUploadToken    = "zk_8a158b96b31bb2e30eeee88f41a2e6c7"
+)
+
+// WorkbenchMediaUpload 工作台参考素材的图床配置。
+type WorkbenchMediaUpload struct {
+	// Endpoint 图床上传接口。留空表示关闭参考素材上传。
+	Endpoint string `json:"endpoint"`
+	// Token 图床鉴权串，原样写进 Authorization 头。
+	// Zipline 用的是 `zk_xxx`，刻意不加 Bearer 前缀。
+	Token string `json:"token"`
+	// PlainTextResponse 为 true 时附带 `x-zipline-no-json: true`，
+	// 让 Zipline 直接返回纯文本 URL 而不是 JSON 包装。
+	PlainTextResponse bool `json:"plain_text_response"`
+}
+
 // WorkbenchModel 是工作台展示的一个模型及其完整参数能力。
 type WorkbenchModel struct {
 	Model          string                  `json:"model"`
@@ -84,11 +106,18 @@ type WorkbenchSetting struct {
 	// **默认 0 = 不限制**（用户多的时候不该被卡住）；确实要给个别用户限流时再调大。
 	// 只影响工作台的异步图片任务，不影响外部 API 的同步调用。
 	AsyncImagePerUser int `json:"async_image_per_user"`
+	// MediaUpload 参考素材图床（上传代理）配置。
+	MediaUpload WorkbenchMediaUpload `json:"media_upload"`
 }
 
 var workbenchSetting = WorkbenchSetting{
 	Models:            []WorkbenchModel{},
 	AsyncImagePerUser: 0,
+	MediaUpload: WorkbenchMediaUpload{
+		Endpoint:          DefaultWorkbenchMediaUploadEndpoint,
+		Token:             DefaultWorkbenchMediaUploadToken,
+		PlainTextResponse: true,
+	},
 }
 
 func init() {
@@ -200,6 +229,11 @@ func NormalizeWorkbenchSetting() {
 	if workbenchSetting.AsyncImagePerUser < 0 {
 		workbenchSetting.AsyncImagePerUser = 0
 	}
+
+	// 图床配置：只去空白。Endpoint 留空是合法状态（等于关闭上传），
+	// 不能在这里回填默认值，否则管理员永远关不掉。
+	workbenchSetting.MediaUpload.Endpoint = strings.TrimSpace(workbenchSetting.MediaUpload.Endpoint)
+	workbenchSetting.MediaUpload.Token = strings.TrimSpace(workbenchSetting.MediaUpload.Token)
 
 	if len(workbenchSetting.Models) == 0 {
 		workbenchSetting.Models = []WorkbenchModel{}

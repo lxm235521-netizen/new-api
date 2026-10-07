@@ -52,6 +52,19 @@ For commercial licensing, please contact support@quantumnous.com
   white-space: nowrap;
 }
 
+/* 参考素材图床：接口地址 + 鉴权串 */
+.wbcfg-mediabed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 12px;
+  background: var(--semi-color-bg-0);
+}
+
 .wbcfg-empty {
   display: flex;
   align-items: center;
