@@ -40,3 +40,9 @@ skills-lock.json
 # 黑马助手单页前端（本地文件，不入库、不推送）
 /index2.html
 /.heima-build/
+
+# 本地诊断脚本（含服务器地址、密码等敏感信息）
+/.diag/
+
+# 各环境的 compose 副本（含明文数据库密码）
+/docker-compose.yml.*
