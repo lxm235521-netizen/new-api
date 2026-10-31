@@ -161,9 +161,10 @@ const PricingCardView = ({
       </Tag>
     );
     if (record.quota_type === 1) {
+      const isPerSecond = record.price_unit === 'per_second';
       billingTag = (
         <Tag key='billing' shape='circle' color='teal' size='small'>
-          {t('按次计费')}
+          {isPerSecond ? t('按秒计费') : t('按次计费')}
         </Tag>
       );
     } else if (record.quota_type === 0) {

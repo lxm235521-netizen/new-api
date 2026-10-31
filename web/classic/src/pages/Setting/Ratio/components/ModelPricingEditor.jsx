@@ -85,6 +85,16 @@ const PriceInput = ({
   </div>
 );
 
+const getBillingModeTagLabel = (model, t, getExprModeLabel) => {
+  if (model.billingMode === 'per-request') {
+    return model.priceUnit === 'per_second' ? t('按秒计费') : t('按次计费');
+  }
+  if (model.billingMode === 'tiered_expr') {
+    return getExprModeLabel(model);
+  }
+  return t('按量计费');
+};
+
 export default function ModelPricingEditor({
   options,
   refresh,
@@ -124,6 +134,7 @@ export default function ModelPricingEditor({
     handleOptionalFieldToggle,
     handleNumericFieldChange,
     handleBillingModeChange,
+    handlePriceUnitChange,
     handleBillingExprChange,
     handleRequestRuleExprChange,
     handleSubmit,
@@ -385,11 +396,7 @@ export default function ModelPricingEditor({
                         : 'blue'
                   }
                 >
-                  {selectedModel.billingMode === 'per-request'
-                    ? t('按次计费')
-                    : selectedModel.billingMode === 'tiered_expr'
-                      ? getExprModeLabel(selectedModel)
-                      : t('按量计费')}
+                  {getBillingModeTagLabel(selectedModel, t, getExprModeLabel)}
                 </Tag>
               ) : null
             }
@@ -441,14 +448,46 @@ export default function ModelPricingEditor({
                 ) : null}
 
                 {selectedModel.billingMode === 'per-request' ? (
-                  <PriceInput
-                    label={t('固定价格')}
-                    value={selectedModel.fixedPrice}
-                    placeholder={t('输入每次调用价格')}
-                    suffix={t('$/次')}
-                    onChange={(value) => handleNumericFieldChange('fixedPrice', value)}
-                    extraText={t('适合 MJ / 任务类等按次收费模型。')}
-                  />
+                  <>
+                    <div className='mb-4'>
+                      <div className='mb-2 font-medium text-gray-700'>
+                        {t('计费单位')}
+                      </div>
+                      <RadioGroup
+                        type='button'
+                        value={selectedModel.priceUnit || 'per_call'}
+                        onChange={(event) =>
+                          handlePriceUnitChange(event.target.value)
+                        }
+                      >
+                        <Radio value='per_call'>{t('按次')}</Radio>
+                        <Radio value='per_second'>{t('按秒')}</Radio>
+                      </RadioGroup>
+                      <div className='mt-2 text-xs text-gray-500'>
+                        {t(
+                          '按次：每次固定收费，不叠加时长/尺寸系数；按秒：价格为每秒单价，按实际时长计费。',
+                        )}
+                      </div>
+                    </div>
+                    <PriceInput
+                      label={t('固定价格')}
+                      value={selectedModel.fixedPrice}
+                      placeholder={
+                        selectedModel.priceUnit === 'per_second'
+                          ? t('输入每秒价格')
+                          : t('输入每次调用价格')
+                      }
+                      suffix={
+                        selectedModel.priceUnit === 'per_second'
+                          ? t('$/秒')
+                          : t('$/次')
+                      }
+                      onChange={(value) =>
+                        handleNumericFieldChange('fixedPrice', value)
+                      }
+                      extraText={t('适合 MJ / 任务类等按次收费模型。')}
+                    />
+                  </>
                 ) : selectedModel.billingMode === 'tiered_expr' ? (
                   <TieredPricingEditor
                     model={selectedModel}

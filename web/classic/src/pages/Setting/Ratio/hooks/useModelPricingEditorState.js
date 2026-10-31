@@ -31,6 +31,7 @@ const EMPTY_MODEL = {
   name: '',
   billingMode: 'per-token',
   fixedPrice: '',
+  priceUnit: 'per_call',
   inputPrice: '',
   completionPrice: '',
   lockedCompletionRatio: '',
@@ -163,6 +164,8 @@ const buildModelState = (name, sourceMaps) => {
     name,
     billingMode: hasValue(fixedPrice) ? 'per-request' : 'per-token',
     fixedPrice,
+    priceUnit:
+      sourceMaps.PriceUnit?.[name] === 'per_second' ? 'per_second' : 'per_call',
     inputPrice,
     completionRatioLocked: completionRatioMeta.locked,
     lockedCompletionRatio: completionRatioMeta.ratio,
@@ -304,6 +307,9 @@ export const buildSummaryText = (model, t) => {
   }
 
   if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
+    if (model.priceUnit === 'per_second') {
+      return `${t('按秒')} $${model.fixedPrice} / ${t('秒')}${requestRuleSuffix}`;
+    }
     return `${t('按次')} $${model.fixedPrice} / ${t('次')}${requestRuleSuffix}`;
   }
 
@@ -648,6 +654,7 @@ export function useModelPricingEditorState({
       AudioCompletionRatio: parseOptionJSON(options.AudioCompletionRatio),
       ModelBillingMode: parseOptionJSON(options['billing_setting.billing_mode']),
       ModelBillingExpr: parseOptionJSON(options['billing_setting.billing_expr']),
+      PriceUnit: parseOptionJSON(options['billing_setting.price_unit']),
     };
 
     const names = new Set([
@@ -663,6 +670,7 @@ export function useModelPricingEditorState({
       ...Object.keys(sourceMaps.AudioCompletionRatio),
       ...Object.keys(sourceMaps.ModelBillingMode),
       ...Object.keys(sourceMaps.ModelBillingExpr),
+      ...Object.keys(sourceMaps.PriceUnit),
     ]);
 
     const nextModels = Array.from(names)
@@ -780,6 +788,14 @@ export function useModelPricingEditorState({
         ...(prev[modelName] || {}),
         [field]: checked,
       },
+    }));
+  };
+
+  const handlePriceUnitChange = (value) => {
+    if (!selectedModel) return;
+    upsertModel(selectedModel.name, (model) => ({
+      ...model,
+      priceUnit: value === 'per_second' ? 'per_second' : 'per_call',
     }));
   };
 
@@ -1039,6 +1055,10 @@ export function useModelPricingEditorState({
         'billing_setting.billing_expr': {},
       };
 
+      const priceUnitOutput = {
+        'billing_setting.price_unit': {},
+      };
+
       for (const model of models) {
         if (model.billingMode === 'tiered_expr') {
           const finalBillingExpr = combineBillingExpr(
@@ -1049,6 +1069,12 @@ export function useModelPricingEditorState({
             tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
             tieredOutput['billing_setting.billing_expr'][model.name] = finalBillingExpr;
           }
+        }
+
+        // 只有固定价格模型需要计费单位；按量计费模型不写入，避免残留脏配置。
+        if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
+          priceUnitOutput['billing_setting.price_unit'][model.name] =
+            model.priceUnit === 'per_second' ? 'per_second' : 'per_call';
         }
 
         // Always serialize ratio/price values for all models (including
@@ -1077,6 +1103,12 @@ export function useModelPricingEditorState({
           }),
         ),
         ...Object.entries(tieredOutput).map(([key, value]) =>
+          API.put('/api/option/', {
+            key,
+            value: JSON.stringify(value, null, 2),
+          }),
+        ),
+        ...Object.entries(priceUnitOutput).map(([key, value]) =>
           API.put('/api/option/', {
             key,
             value: JSON.stringify(value, null, 2),
@@ -1123,6 +1155,7 @@ export function useModelPricingEditorState({
     handleOptionalFieldToggle,
     handleNumericFieldChange,
     handleBillingModeChange,
+    handlePriceUnitChange,
     handleBillingExprChange,
     handleRequestRuleExprChange,
     handleSubmit,

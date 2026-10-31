@@ -13,18 +13,28 @@ const (
 	BillingModeTieredExpr = "tiered_expr"
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
+	PriceUnitField        = "price_unit"
+
+	// PriceUnitPerCall 按次计费：模型价格就是每次的固定价格，不乘时长/尺寸等系数。
+	PriceUnitPerCall = "per_call"
+	// PriceUnitPerSecond 按秒计费：模型价格是每秒单价，会乘请求时长等系数。
+	PriceUnitPerSecond = "per_second"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
-// DB keys: billing_setting.billing_mode, billing_setting.billing_expr
+// DB keys: billing_setting.billing_mode, billing_setting.billing_expr, billing_setting.price_unit
 type BillingSetting struct {
 	BillingMode map[string]string `json:"billing_mode"`
 	BillingExpr map[string]string `json:"billing_expr"`
+	// PriceUnit 每个模型的计费单位（per_call / per_second）。
+	// 未配置时沿用旧的「任务按次计费模型名」列表行为，保证历史配置不变。
+	PriceUnit map[string]string `json:"price_unit"`
 }
 
 var billingSetting = BillingSetting{
 	BillingMode: make(map[string]string),
 	BillingExpr: make(map[string]string),
+	PriceUnit:   make(map[string]string),
 }
 
 func init() {
@@ -55,13 +65,35 @@ func GetBillingExprCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingExpr)
 }
 
+// GetPriceUnit 返回模型显式配置的计费单位（per_call / per_second），未配置返回空串。
+func GetPriceUnit(model string) string {
+	return billingSetting.PriceUnit[model]
+}
+
+func GetPriceUnitCopy() map[string]string {
+	return lo.Assign(billingSetting.PriceUnit)
+}
+
+// IsPerSecondPriced 判断模型是否显式配置为按秒计费。
+func IsPerSecondPriced(model string) bool {
+	return billingSetting.PriceUnit[model] == PriceUnitPerSecond
+}
+
+// IsPerCallPriced 判断模型是否显式配置为按次计费。
+func IsPerCallPriced(model string) bool {
+	return billingSetting.PriceUnit[model] == PriceUnitPerCall
+}
+
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 2)
+	extra := make(map[string]any, 3)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
 	if exprs := GetBillingExprCopy(); len(exprs) > 0 {
 		extra[BillingExprField] = exprs
+	}
+	if units := GetPriceUnitCopy(); len(units) > 0 {
+		extra[PriceUnitField] = units
 	}
 	return lo.Assign(base, extra)
 }

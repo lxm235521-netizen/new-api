@@ -4387,6 +4387,11 @@
     "审计文件目录": "Thư mục tệp kiểm toán",
     "保存请求审计设置": "Lưu cài đặt kiểm toán",
     "环境变量 PROMPT_AUDIT_* 显式设置时会覆盖此处的配置，便于应急开关。": "Biến môi trường PROMPT_AUDIT_* được đặt rõ ràng sẽ ghi đè cấu hình này (dùng làm công tắc khẩn cấp).",
-    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Các yêu cầu khớp cả người dùng và mô hình được theo dõi sẽ được ghi nối tiếp dạng JSONL vào thư mục log; yêu cầu không khớp không tạo bản ghi nào. Nội dung chứa đầu vào gốc của người dùng (dữ liệu nhạy cảm) — hãy giới hạn quyền truy cập và thời gian lưu."
+    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Các yêu cầu khớp cả người dùng và mô hình được theo dõi sẽ được ghi nối tiếp dạng JSONL vào thư mục log; yêu cầu không khớp không tạo bản ghi nào. Nội dung chứa đầu vào gốc của người dùng (dữ liệu nhạy cảm) — hãy giới hạn quyền truy cập và thời gian lưu.",
+    "按秒": "Theo giây",
+    "计费单位": "Đơn vị tính phí",
+    "$/秒": "$/giây",
+    "输入每秒价格": "Nhập giá mỗi giây",
+    "按次：每次固定收费，不叠加时长/尺寸系数；按秒：价格为每秒单价，按实际时长计费。": "Theo lần: phí cố định mỗi yêu cầu, không nhân hệ số thời lượng/kích thước. Theo giây: đơn giá mỗi giây, tính theo thời lượng thực tế."
   }
 }

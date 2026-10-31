@@ -52,6 +52,7 @@ type ModelFormValues = {
   ExposeRatioEnabled: boolean
   BillingMode: string
   BillingExpr: string
+  PriceUnit: string
 }
 
 type ModelRatioFormProps = {
@@ -137,10 +138,12 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               audioCompletionRatio={form.watch('AudioCompletionRatio')}
               billingMode={form.watch('BillingMode')}
               billingExpr={form.watch('BillingExpr')}
+              priceUnit={form.watch('PriceUnit')}
               onChange={(field, value) => {
                 const fieldMap: Record<string, keyof ModelFormValues> = {
                   'billing_setting.billing_mode': 'BillingMode',
                   'billing_setting.billing_expr': 'BillingExpr',
+                  'billing_setting.price_unit': 'PriceUnit',
                 }
                 const formField =
                   fieldMap[field] || (field as keyof ModelFormValues)
@@ -185,6 +188,25 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                   <FormDescription>
                     {t(
                       'JSON map of model → USD cost per request. Takes precedence over ratio based billing.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='PriceUnit'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Billing unit')}</FormLabel>
+                  <FormControl>
+                    <Textarea rows={6} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.'
                     )}
                   </FormDescription>
                   <FormMessage />

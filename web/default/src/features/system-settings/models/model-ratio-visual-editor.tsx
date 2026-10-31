@@ -78,6 +78,7 @@ type ModelRatioVisualEditorProps = {
   audioCompletionRatio: string
   billingMode: string
   billingExpr: string
+  priceUnit: string
   onChange: (field: string, value: string) => void
 }
 
@@ -94,6 +95,7 @@ type ModelRow = {
   billingMode?: string
   billingExpr?: string
   requestRuleExpr?: string
+  priceUnit?: string
   hasConflict: boolean
 }
 
@@ -147,7 +149,9 @@ const getPriceSummary = (row: ModelRow, t: (key: string) => string) => {
     return getExpressionSummary(row, t)
   }
   if (row.billingMode === 'per-request') {
-    return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
+    if (!row.price) return t('Unset price')
+    const unit = row.priceUnit === 'per_second' ? t('second') : t('request')
+    return `$${row.price} / ${unit}`
   }
 
   const inputPrice = ratioToPrice(row.ratio)
@@ -204,6 +208,7 @@ export const ModelRatioVisualEditor = memo(
     audioCompletionRatio,
     billingMode,
     billingExpr,
+    priceUnit,
     onChange,
   }: ModelRatioVisualEditorProps) {
     const { t } = useTranslation()
@@ -305,6 +310,10 @@ export const ModelRatioVisualEditor = memo(
           context: 'billing expression',
         }
       )
+      const priceUnitMap = safeJsonParse<Record<string, string>>(priceUnit, {
+        fallback: {},
+        context: 'price unit',
+      })
 
       const modelNames = new Set([
         ...Object.keys(priceMap),
@@ -350,6 +359,7 @@ export const ModelRatioVisualEditor = memo(
             imageRatio: image,
             audioRatio: audio,
             audioCompletionRatio: audioCompletion,
+            priceUnit: priceUnitMap[name],
             hasConflict: false,
           }
         }
@@ -365,6 +375,7 @@ export const ModelRatioVisualEditor = memo(
           audioRatio: audio,
           audioCompletionRatio: audioCompletion,
           billingMode: price !== '' ? 'per-request' : 'per-token',
+          priceUnit: priceUnitMap[name],
           hasConflict:
             price !== '' &&
             (ratio !== '' ||
@@ -389,6 +400,7 @@ export const ModelRatioVisualEditor = memo(
       audioCompletionRatio,
       billingMode,
       billingExpr,
+      priceUnit,
     ])
 
     const modeCounts = useMemo(
@@ -509,6 +521,10 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const priceUnitMap = safeJsonParse<Record<string, string>>(priceUnit, {
+          fallback: {},
+          silent: true,
+        })
 
         delete priceMap[name]
         delete ratioMap[name]
@@ -520,6 +536,7 @@ export const ModelRatioVisualEditor = memo(
         delete audioCompletionMap[name]
         delete billingModeMap[name]
         delete billingExprMap[name]
+        delete priceUnitMap[name]
 
         onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
         onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
@@ -540,6 +557,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          'billing_setting.price_unit',
+          JSON.stringify(priceUnitMap, null, 2)
+        )
       },
       [
         modelPrice,
@@ -552,8 +573,23 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        priceUnit,
         onChange,
       ]
+    )
+
+    // 每一行的计费单位（按次 / 按秒）直接写进 billing_setting.price_unit。
+    // 显式写入 per_call 会让后端跳过时长/尺寸系数，避免「显示按次、实际按秒扣费」。
+    const handlePriceUnitChange = useCallback(
+      (name: string, unit: string) => {
+        const unitMap = safeJsonParse<Record<string, string>>(priceUnit, {
+          fallback: {},
+          silent: true,
+        })
+        unitMap[name] = unit === 'per_second' ? 'per_second' : 'per_call'
+        onChange('billing_setting.price_unit', JSON.stringify(unitMap, null, 2))
+      },
+      [priceUnit, onChange]
     )
 
     const columns = useMemo<ColumnDef<ModelRow>[]>(() => {
@@ -647,6 +683,35 @@ export const ModelRatioVisualEditor = memo(
           meta: { label: t('Price summary') },
         },
         {
+          accessorKey: 'priceUnit',
+          header: ({ column }) => (
+            <DataTableColumnHeader column={column} title={t('Billing unit')} />
+          ),
+          cell: ({ row }) => {
+            if (row.original.billingMode === 'per-token') {
+              return <span className='text-muted-foreground/50'>—</span>
+            }
+            const unit =
+              row.original.priceUnit === 'per_second'
+                ? 'per_second'
+                : 'per_call'
+            return (
+              <select
+                value={unit}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) =>
+                  handlePriceUnitChange(row.original.name, event.target.value)
+                }
+                className='border-input bg-background h-7 rounded-md border px-1.5 text-xs'
+              >
+                <option value='per_call'>{t('Per call')}</option>
+                <option value='per_second'>{t('Per second')}</option>
+              </select>
+            )
+          },
+          meta: { label: t('Billing unit') },
+        },
+        {
           id: 'actions',
           cell: ({ row }) => (
             <div className='flex justify-end gap-2'>
@@ -669,7 +734,7 @@ export const ModelRatioVisualEditor = memo(
           enableHiding: false,
         },
       ]
-    }, [handleEdit, handleDelete, t])
+    }, [handleEdit, handleDelete, handlePriceUnitChange, t])
 
     const table = useReactTable({
       data: models,
@@ -744,6 +809,10 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const priceUnitMap = safeJsonParse<Record<string, string>>(priceUnit, {
+          fallback: {},
+          silent: true,
+        })
 
         const setIfPresent = (
           target: Record<string, number>,
@@ -791,6 +860,8 @@ export const ModelRatioVisualEditor = memo(
           } else if (data.price && data.price !== '') {
             setIfPresent(priceMap, name, data.price)
           } else {
+            // 改成按量计费后，旧的计费单位不再适用
+            delete priceUnitMap[name]
             setIfPresent(ratioMap, name, data.ratio)
             setIfPresent(cacheMap, name, data.cacheRatio)
             setIfPresent(createCacheMap, name, data.createCacheRatio)
@@ -820,6 +891,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          'billing_setting.price_unit',
+          JSON.stringify(priceUnitMap, null, 2)
+        )
       },
       [
         modelPrice,
@@ -832,6 +907,7 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        priceUnit,
         onChange,
       ]
     )
@@ -1042,6 +1118,7 @@ export const ModelRatioVisualEditor = memo(
       prevProps.audioCompletionRatio === nextProps.audioCompletionRatio &&
       prevProps.billingMode === nextProps.billingMode &&
       prevProps.billingExpr === nextProps.billingExpr &&
+      prevProps.priceUnit === nextProps.priceUnit &&
       prevProps.onChange === nextProps.onChange
     )
   }

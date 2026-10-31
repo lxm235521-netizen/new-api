@@ -1774,7 +1774,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "2025 年 5 月 10 日以降に追加されたチャネルの場合、デプロイ時にモデル名から「.」を削除する必要はありません",
     "For private deployments, format: https://fastgpt.run/api/openapi": "プライベートデプロイメントの場合、形式: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "構文的に有効な JSON 応答を強制",
@@ -4523,6 +4523,14 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Per Second": "秒単位",
+    "Per second": "秒単位",
+    "second": "秒",
+    "Billing unit": "課金単位",
+    "Per call": "回単位",
+    "Charged by actual generation duration.": "実際の生成時間に応じて課金されます。",
+    "Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.": "「モデル価格」でモデルごとに課金単位を設定することを推奨します。このリストは互換性のために残されています。",
+    "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.": "モデル → per_call / per_second の JSON マップ。回単位のモデルは時間・サイズ係数を掛けず、秒単位のモデルは実際の時間で課金されます。"
   }
 }

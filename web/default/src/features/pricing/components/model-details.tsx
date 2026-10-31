@@ -269,11 +269,16 @@ function ModelHeader(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const model = props.model
   const modelIconKey = model.icon || model.vendor_icon
-  const modelIcon = modelIconKey
-    ? getLobeIcon(modelIconKey, 20)
-    : null
+  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
   const description = model.description || model.vendor_description || null
   const tags = parseTags(model.tags)
+  const isPerSecondPriced = model.price_unit === 'per_second'
+  let billingModeLabel = t('Per Request')
+  if (model.quota_type === QUOTA_TYPE_VALUES.TOKEN) {
+    billingModeLabel = t('Token-based')
+  } else if (isPerSecondPriced) {
+    billingModeLabel = t('Per Second')
+  }
   const isSpecialExpression =
     model.billing_mode === 'tiered_expr' &&
     Boolean(model.billing_expr) &&
@@ -300,11 +305,7 @@ function ModelHeader(props: { model: PricingModel }) {
           <span className='text-muted-foreground'>{model.vendor_name}</span>
         )}
         <span className='text-muted-foreground/30'>·</span>
-        <span className='text-muted-foreground/70'>
-          {model.quota_type === QUOTA_TYPE_VALUES.TOKEN
-            ? t('Token-based')
-            : t('Per Request')}
-        </span>
+        <span className='text-muted-foreground/70'>{billingModeLabel}</span>
         {model.billing_mode === 'tiered_expr' && model.billing_expr && (
           <>
             <span className='text-muted-foreground/30'>·</span>
@@ -478,12 +479,13 @@ function PriceSection(props: {
   }
 
   if (!isTokenBased) {
+    const perSecond = props.model.price_unit === 'per_second'
     return (
       <section>
         <SectionTitle>{t('Base Price')}</SectionTitle>
         <div className='flex items-baseline justify-between'>
           <span className='text-muted-foreground text-sm'>
-            {t('Per request')}
+            {perSecond ? t('Per second') : t('Per request')}
           </span>
           <span className='text-foreground font-mono text-sm font-semibold tabular-nums'>
             {formatFixedPrice(
@@ -496,6 +498,11 @@ function PriceSection(props: {
             )}
           </span>
         </div>
+        {perSecond && (
+          <p className='text-muted-foreground/60 mt-2 text-xs'>
+            {t('Charged by actual generation duration.')}
+          </p>
+        )}
       </section>
     )
   }

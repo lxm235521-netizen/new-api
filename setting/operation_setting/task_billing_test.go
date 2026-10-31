@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
@@ -54,5 +55,32 @@ func TestTaskPerCallBillingSettingUpdate(t *testing.T) {
 	}
 	if IsTaskPerCallBillingModel("missing-model") {
 		t.Fatal("unexpected model matched task per-call billing")
+	}
+}
+
+// 模型价格里显式配置的计费单位优先于旧的「任务按次计费模型名」列表。
+func TestIsTaskPerCallBillingModel_PriceUnitOverridesLegacyList(t *testing.T) {
+	withTaskPerCallBillingSettings(t, []string{"legacy-model"}, nil)
+
+	cfg := config.GlobalConfig.Get("billing_setting")
+	bs, ok := cfg.(*billing_setting.BillingSetting)
+	if !ok {
+		t.Fatal("billing_setting config is not registered")
+	}
+	originalUnits := bs.PriceUnit
+	bs.PriceUnit = map[string]string{
+		"legacy-model": billing_setting.PriceUnitPerSecond,
+		"new-model":    billing_setting.PriceUnitPerCall,
+	}
+	t.Cleanup(func() { bs.PriceUnit = originalUnits })
+
+	if IsTaskPerCallBillingModel("legacy-model") {
+		t.Fatal("per_second unit should override the legacy per-call list")
+	}
+	if !IsTaskPerCallBillingModel("new-model") {
+		t.Fatal("per_call unit should enable per-call billing")
+	}
+	if IsTaskPerCallBillingModel("unconfigured-model") {
+		t.Fatal("model without unit or legacy entry should not be per-call")
 	}
 }

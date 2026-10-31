@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 )
@@ -35,7 +36,9 @@ type Pricing struct {
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
-	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	// PriceUnit 固定价格模型的计费单位：per_call / per_second，空表示未显式配置（前端按「次」展示）。
+	PriceUnit      string `json:"price_unit,omitempty"`
+	PricingVersion string `json:"pricing_version,omitempty"`
 }
 
 type PricingVendor struct {
@@ -336,6 +339,14 @@ func updatePricing() {
 				pricing.BillingMode = billingMode
 				pricing.BillingExpr = expr
 			}
+		}
+		// 固定价格模型的计费单位：显式配置优先，否则沿用旧的按次计费列表（列表内=按次）。
+		if pricing.QuotaType == 1 {
+			unit := billing_setting.GetPriceUnit(model)
+			if unit == "" && operation_setting.IsTaskPerCallBillingModel(model) {
+				unit = billing_setting.PriceUnitPerCall
+			}
+			pricing.PriceUnit = unit
 		}
 		pricingMap = append(pricingMap, pricing)
 	}

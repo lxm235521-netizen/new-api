@@ -130,6 +130,15 @@ const modelSchema = z.object({
       })
     }
   }),
+  PriceUnit: z.string().superRefine((value, ctx) => {
+    const result = validateJsonString(value)
+    if (!result.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: result.message || 'Invalid JSON',
+      })
+    }
+  }),
 })
 
 const groupSchema = z.object({
@@ -249,6 +258,7 @@ export function RatioSettingsCard({
     ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
     BillingMode: normalizeJsonString(modelDefaults.BillingMode),
     BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
+    PriceUnit: normalizeJsonString(modelDefaults.PriceUnit),
   })
 
   const groupNormalizedDefaults = useRef({
@@ -280,6 +290,7 @@ export function RatioSettingsCard({
       ),
       BillingMode: formatJsonForTextarea(modelDefaults.BillingMode),
       BillingExpr: formatJsonForTextarea(modelDefaults.BillingExpr),
+      PriceUnit: formatJsonForTextarea(modelDefaults.PriceUnit),
     },
   })
 
@@ -314,6 +325,7 @@ export function RatioSettingsCard({
       ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
       BillingMode: normalizeJsonString(modelDefaults.BillingMode),
       BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
+      PriceUnit: normalizeJsonString(modelDefaults.PriceUnit),
     }
 
     modelForm.reset({
@@ -330,6 +342,7 @@ export function RatioSettingsCard({
       ),
       BillingMode: formatJsonForTextarea(modelDefaults.BillingMode),
       BillingExpr: formatJsonForTextarea(modelDefaults.BillingExpr),
+      PriceUnit: formatJsonForTextarea(modelDefaults.PriceUnit),
     })
   }, [modelDefaults, modelForm])
 
@@ -373,11 +386,13 @@ export function RatioSettingsCard({
         ExposeRatioEnabled: values.ExposeRatioEnabled,
         BillingMode: normalizeJsonString(values.BillingMode),
         BillingExpr: normalizeJsonString(values.BillingExpr),
+        PriceUnit: normalizeJsonString(values.PriceUnit),
       }
 
       const apiKeyMap: Record<string, string> = {
         BillingMode: 'billing_setting.billing_mode',
         BillingExpr: 'billing_setting.billing_expr',
+        PriceUnit: 'billing_setting.price_unit',
       }
 
       const updates = (

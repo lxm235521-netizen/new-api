@@ -1775,7 +1775,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Force a syntactically valid JSON response",
@@ -4536,6 +4536,14 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Per Second": "Per Second",
+    "Per second": "Per second",
+    "second": "second",
+    "Billing unit": "Billing unit",
+    "Per call": "Per call",
+    "Charged by actual generation duration.": "Charged by actual generation duration.",
+    "Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.": "Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.",
+    "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.": "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration."
   }
 }

@@ -54,6 +54,8 @@ export type PricingModel = {
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  /** Fixed-price billing unit: per_call or per_second */
+  price_unit?: 'per_call' | 'per_second'
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
   /**

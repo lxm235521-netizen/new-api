@@ -57,9 +57,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const groups = props.model.enable_groups || []
   const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
-  const modelIcon = modelIconKey
-    ? getLobeIcon(modelIconKey, 28)
-    : null
+  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
   const isDynamicPricing =
     props.model.billing_mode === 'tiered_expr' &&
@@ -76,6 +74,14 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     : null
 
   const primaryGroup = groups[0]
+  const isPerSecondPriced = props.model.price_unit === 'per_second'
+  const priceUnitLabel = isPerSecondPriced ? t('second') : t('request')
+  let billingModeLabel = t('Per Request')
+  if (isTokenBased) {
+    billingModeLabel = t('Token-based')
+  } else if (isPerSecondPriced) {
+    billingModeLabel = t('Per Second')
+  }
   const bottomTags = [...endpoints.slice(0, 2), ...tags.slice(0, 2)]
   const hiddenCount =
     Math.max(groups.length - 1, 0) +
@@ -195,7 +201,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                       usdExchangeRate
                     )}
                   </span>{' '}
-                  / {t('request')}
+                  / {priceUnitLabel}
                 </span>
               )}
             </div>
@@ -236,7 +242,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             </span>
           )}
           <span className='text-muted-foreground text-xs font-medium'>
-            {isTokenBased ? t('Token-based') : t('Per Request')}
+            {billingModeLabel}
           </span>
           {isDynamicPricing && (
             <StatusBadge

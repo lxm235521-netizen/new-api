@@ -124,6 +124,11 @@ export function TaskPerCallBillingSection({
                     'Listed task models are charged once per request, without duration or size multipliers. Changes apply to new tasks immediately.'
                   )}
                 </FormDescription>
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.'
+                  )}
+                </p>
                 <FormMessage />
               </FormItem>
             )}

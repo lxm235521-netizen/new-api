@@ -4009,6 +4009,11 @@
     "审计文件目录": "Audit file directory",
     "保存请求审计设置": "Save request audit settings",
     "环境变量 PROMPT_AUDIT_* 显式设置时会覆盖此处的配置，便于应急开关。": "Explicit PROMPT_AUDIT_* environment variables override these settings (useful as an emergency switch).",
-    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Requests matching both monitored users and models are appended as JSONL to the log directory; unmatched requests leave no record. The content includes raw user input (sensitive data) - restrict file access and retention."
+    "命中「监控用户 + 监控模型」的请求，其输入与输出会以 JSONL 追加写入日志目录；未命中的请求不产生任何记录。审计内容包含用户原始输入，属于敏感数据，请控制文件访问权限与留存时间。": "Requests matching both monitored users and models are appended as JSONL to the log directory; unmatched requests leave no record. The content includes raw user input (sensitive data) - restrict file access and retention.",
+    "按秒": "Per second",
+    "计费单位": "Billing unit",
+    "$/秒": "$/second",
+    "输入每秒价格": "Enter price per second",
+    "按次：每次固定收费，不叠加时长/尺寸系数；按秒：价格为每秒单价，按实际时长计费。": "Per call: fixed fee per request without duration or size multipliers. Per second: the price is a per-second rate, charged by actual duration."
   }
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
@@ -47,8 +48,18 @@ func RebuildTaskPerCallBillingIndex() {
 	currentTaskPerCallBillingIndex.Store(&taskPerCallBillingIndex{modelNames: modelNames})
 }
 
-// IsTaskPerCallBillingModel reports whether a task model is configured for per-call billing.
+// IsTaskPerCallBillingModel reports whether a task model is billed once per request.
+//
+// 判定顺序：
+//  1. 模型在「模型价格」里显式配置了计费单位（billing_setting.price_unit）→ 以它为准；
+//  2. 否则回退到旧的「任务按次计费模型名」列表 / TASK_PRICE_PATCH，保持历史行为不变。
 func IsTaskPerCallBillingModel(modelName string) bool {
+	switch billing_setting.GetPriceUnit(modelName) {
+	case billing_setting.PriceUnitPerCall:
+		return true
+	case billing_setting.PriceUnitPerSecond:
+		return false
+	}
 	idx := currentTaskPerCallBillingIndex.Load()
 	if idx != nil {
 		if _, ok := idx.modelNames[modelName]; ok {
