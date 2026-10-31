@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,6 +36,114 @@ type TaskPollingAdaptor interface {
 // GetTaskAdaptorFunc 由 main 包注入，用于获取指定平台的任务适配器。
 // 打破 service -> relay -> relay/channel -> service 的循环依赖。
 var GetTaskAdaptorFunc func(platform constant.TaskPlatform) TaskPollingAdaptor
+
+const (
+	// defaultTaskFetchTimeout 单次上游状态查询的兜底超时。
+	defaultTaskFetchTimeout = 30 * time.Second
+
+	// defaultTaskChannelFailureLimit 单渠道连续超时多少次后跳过本轮剩余任务。
+	defaultTaskChannelFailureLimit = 3
+
+	// taskPollingSlowRoundWarn 单轮耗时超过该值时打 WARN，方便监控告警。
+	taskPollingSlowRoundWarn = 2 * time.Minute
+
+	// taskChannelCooldown 某个渠道连续超时被熔断后，冷却多久再重试。
+	// 超时的请求只能等 TCP keepalive 回收（约 2 小时），冷却是为了避免对挂死的上游
+	// 每 15 秒重试一次、堆积连接和 goroutine。
+	taskChannelCooldown = 2 * time.Minute
+)
+
+// errTaskFetchTimeout 标记「上游状态查询超时」，用于渠道级熔断计数。
+var errTaskFetchTimeout = errors.New("task fetch timeout")
+
+// 渠道级冷却：channelId -> 允许重试的时间点。
+var (
+	taskChannelCooldownMu sync.Mutex
+	taskChannelRetryAfter = make(map[int]time.Time)
+)
+
+// taskChannelInCooldown 返回该渠道是否仍在冷却期，以及冷却结束时间。
+func taskChannelInCooldown(channelId int, now time.Time) (time.Time, bool) {
+	taskChannelCooldownMu.Lock()
+	defer taskChannelCooldownMu.Unlock()
+	until, ok := taskChannelRetryAfter[channelId]
+	if !ok {
+		return time.Time{}, false
+	}
+	if !now.Before(until) {
+		delete(taskChannelRetryAfter, channelId)
+		return time.Time{}, false
+	}
+	return until, true
+}
+
+// setTaskChannelCooldown 把渠道打入冷却，直到 until。
+func setTaskChannelCooldown(channelId int, until time.Time) {
+	taskChannelCooldownMu.Lock()
+	taskChannelRetryAfter[channelId] = until
+	taskChannelCooldownMu.Unlock()
+}
+
+// TaskFetcher 是「查询上游任务状态」的最小接口，TaskPollingAdaptor 天然满足它。
+type TaskFetcher interface {
+	FetchTask(baseURL string, key string, body map[string]any, proxy string) (*http.Response, error)
+}
+
+type taskFetchResult struct {
+	resp *http.Response
+	err  error
+}
+
+// FetchTaskWithTimeout 给上游状态查询加硬超时。
+//
+// 背景：各 adaptor 的 FetchTask 内部统一使用 service.GetHttpClientWithProxy，
+// 而该 client 在未配置 RELAY_TIMEOUT（默认 0）时**没有任何超时**。上游如果把连接挂住
+// （accept 后不回包、NAT 表项被静默丢弃、上游进程重启留下半开连接），调用方会一直等下去。
+// 任务轮询只有一个协程，一次挂起就会让所有视频任务停在提交时的 NOT_START
+// （线上出现过 6012 秒和 7322 秒的停摆，只有当 TCP keepalive 或上游重置连接时才恢复）。
+//
+// 这里用独立 goroutine + select 提供硬超时；对迟到的响应会关闭 body，避免连接泄漏。
+// adaptor 内部的 panic 也会被转成错误返回，不会杀死调用方协程。
+func FetchTaskWithTimeout(fetcher TaskFetcher, baseURL, key string, body map[string]any, proxy string, timeout time.Duration) (*http.Response, error) {
+	if timeout <= 0 {
+		timeout = defaultTaskFetchTimeout
+	}
+	resultCh := make(chan taskFetchResult, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resultCh <- taskFetchResult{err: fmt.Errorf("fetchTask panic: %v", r)}
+			}
+		}()
+		resp, err := fetcher.FetchTask(baseURL, key, body, proxy)
+		resultCh <- taskFetchResult{resp: resp, err: err}
+	}()
+
+	select {
+	case r := <-resultCh:
+		return r.resp, r.err
+	case <-time.After(timeout):
+		// 迟到的响应：等它真正返回后关掉 body，避免连接和 goroutine 泄漏。
+		go func() {
+			if r, ok := <-resultCh; ok && r.resp != nil && r.resp.Body != nil {
+				_ = r.resp.Body.Close()
+			}
+		}()
+		return nil, fmt.Errorf("%w after %s", errTaskFetchTimeout, timeout)
+	}
+}
+
+// runTaskUpdateSafely 执行单个任务的更新，并把 panic 收敛成 error。
+// 轮询协程只有一条，任何一条脏数据导致的 panic 都不能升级成「所有任务永久停摆」。
+func runTaskUpdateSafely(ctx context.Context, adaptor TaskPollingAdaptor, ch *model.Channel, taskId string, taskM map[string]*model.Task) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+			logger.LogError(ctx, fmt.Sprintf("更新视频任务 %s 时 panic: %v\n%s", taskId, r, debug.Stack()))
+		}
+	}()
+	return updateVideoSingleTask(ctx, adaptor, ch, taskId, taskM)
+}
 
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
 // 每次最多处理 100 条，剩余的下个周期继续处理。
@@ -91,49 +201,69 @@ func sweepTimedOutTasks(ctx context.Context) {
 func TaskPollingLoop() {
 	for {
 		time.Sleep(time.Duration(15) * time.Second)
-		common.SysLog("任务进度轮询开始")
-		ctx := context.TODO()
-		sweepTimedOutTasks(ctx)
-		allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
-		platformTask := make(map[constant.TaskPlatform][]*model.Task)
-		for _, t := range allTasks {
-			platformTask[t.Platform] = append(platformTask[t.Platform], t)
-		}
-		for platform, tasks := range platformTask {
-			if len(tasks) == 0 {
-				continue
-			}
-			taskChannelM := make(map[int][]string)
-			taskM := make(map[string]*model.Task)
-			nullTaskIds := make([]int64, 0)
-			for _, task := range tasks {
-				upstreamID := task.GetUpstreamTaskID()
-				if upstreamID == "" {
-					// 统计失败的未完成任务
-					nullTaskIds = append(nullTaskIds, task.ID)
-					continue
-				}
-				taskM[upstreamID] = task
-				taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
-			}
-			if len(nullTaskIds) > 0 {
-				err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
-					"status":   "FAILURE",
-					"progress": "100%",
-				})
-				if err != nil {
-					logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
-				} else {
-					logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
-				}
-			}
-			if len(taskChannelM) == 0 {
-				continue
-			}
+		runTaskPollingRound()
+	}
+}
 
-			DispatchPlatformUpdate(platform, taskChannelM, taskM)
+// runTaskPollingRound 执行一轮任务状态轮询。
+//
+// 整个轮次包在 recover 里：单条任务的脏数据、上游返回的异常结构都可能触发 panic，
+// 而轮询只有一条协程，panic 会直接杀死它 —— 之后所有任务永远停在提交时的状态。
+// 这里保证「一轮失败」不会升级成「永久停摆」。
+func runTaskPollingRound() {
+	startedAt := time.Now()
+	common.SysLog("任务进度轮询开始")
+	defer func() {
+		if r := recover(); r != nil {
+			logger.LogError(context.Background(), fmt.Sprintf("任务进度轮询 panic: %v\n%s", r, debug.Stack()))
 		}
-		common.SysLog("任务进度轮询完成")
+		elapsed := time.Since(startedAt)
+		common.SysLog(fmt.Sprintf("任务进度轮询完成，耗时 %s", elapsed.Round(time.Millisecond)))
+		if elapsed > taskPollingSlowRoundWarn {
+			logger.LogWarn(context.Background(), fmt.Sprintf("任务进度轮询单轮耗时 %s，可能存在上游响应过慢", elapsed.Round(time.Second)))
+		}
+	}()
+
+	ctx := context.Background()
+	sweepTimedOutTasks(ctx)
+	allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
+	platformTask := make(map[constant.TaskPlatform][]*model.Task)
+	for _, t := range allTasks {
+		platformTask[t.Platform] = append(platformTask[t.Platform], t)
+	}
+	for platform, tasks := range platformTask {
+		if len(tasks) == 0 {
+			continue
+		}
+		taskChannelM := make(map[int][]string)
+		taskM := make(map[string]*model.Task)
+		nullTaskIds := make([]int64, 0)
+		for _, task := range tasks {
+			upstreamID := task.GetUpstreamTaskID()
+			if upstreamID == "" {
+				// 统计失败的未完成任务
+				nullTaskIds = append(nullTaskIds, task.ID)
+				continue
+			}
+			taskM[upstreamID] = task
+			taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
+		}
+		if len(nullTaskIds) > 0 {
+			err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
+				"status":   "FAILURE",
+				"progress": "100%",
+			})
+			if err != nil {
+				logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
+			} else {
+				logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
+			}
+		}
+		if len(taskChannelM) == 0 {
+			continue
+		}
+
+		DispatchPlatformUpdate(platform, taskChannelM, taskM)
 	}
 }
 
@@ -302,6 +432,11 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 	if len(taskIds) == 0 {
 		return nil
 	}
+	if until, inCooldown := taskChannelInCooldown(channelId, time.Now()); inCooldown {
+		logger.LogDebug(ctx, fmt.Sprintf("Channel #%d 处于冷却期，跳过本轮（%s 后重试）",
+			channelId, time.Until(until).Round(time.Second)))
+		return nil
+	}
 	cacheGetChannel, err := model.CacheGetChannel(channelId)
 	if err != nil {
 		// Collect DB primary key IDs for bulk update (taskIds are upstream IDs, not task_id column values)
@@ -331,12 +466,38 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 	}
 	info.ApiKey = cacheGetChannel.Key
 	adaptor.Init(info)
-	for _, taskId := range taskIds {
-		if err := updateVideoSingleTask(ctx, adaptor, cacheGetChannel, taskId, taskM); err != nil {
+
+	failureLimit := constant.TaskChannelFailureLimit
+	if failureLimit <= 0 {
+		failureLimit = defaultTaskChannelFailureLimit
+	}
+	consecutiveTimeouts := 0
+	for i, taskId := range taskIds {
+		err := runTaskUpdateSafely(ctx, adaptor, cacheGetChannel, taskId, taskM)
+		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("Failed to update video task %s: %s", taskId, err.Error()))
+			if errors.Is(err, errTaskFetchTimeout) {
+				consecutiveTimeouts++
+			} else {
+				consecutiveTimeouts = 0
+			}
+		} else {
+			consecutiveTimeouts = 0
 		}
-		// sleep 1 second between each task to avoid hitting rate limits of upstream platforms
-		time.Sleep(1 * time.Second)
+		if consecutiveTimeouts >= failureLimit {
+			// 单个上游持续超时：本轮跳过剩余任务，并让该渠道冷却一段时间。
+			// 超时的请求要等 TCP keepalive 才能回收，若不冷却，每 15 秒重试一次
+			// 会在上游长时间挂死时堆积大量连接和 goroutine。
+			setTaskChannelCooldown(channelId, time.Now().Add(taskChannelCooldown))
+			logger.LogWarn(ctx, fmt.Sprintf(
+				"Channel #%d 连续 %d 次上游状态查询超时，本轮跳过剩余 %d 个任务，冷却 %s 后重试",
+				channelId, consecutiveTimeouts, len(taskIds)-i-1, taskChannelCooldown))
+			break
+		}
+		if i < len(taskIds)-1 {
+			// sleep 1 second between each task to avoid hitting rate limits of upstream platforms
+			time.Sleep(1 * time.Second)
+		}
 	}
 	return nil
 }
@@ -359,12 +520,18 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if privateData.Key != "" {
 		key = privateData.Key
 	}
-	resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
+	resp, err := FetchTaskWithTimeout(adaptor, baseURL, key, map[string]any{
 		"task_id": task.GetUpstreamTaskID(),
 		"action":  task.Action,
-	}, proxy)
+	}, proxy, time.Duration(constant.TaskFetchTimeoutSeconds)*time.Second)
 	if err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
+	}
+	if resp == nil || resp.Body == nil {
+		return fmt.Errorf("fetchTask returned empty response for task %s", taskId)
 	}
 	defer resp.Body.Close()
 	responseBody, err := io.ReadAll(resp.Body)

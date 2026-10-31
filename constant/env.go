@@ -19,6 +19,13 @@ var ErrorLogEnabled bool
 var TaskQueryLimit int
 var TaskTimeoutMinutes int
 
+// TaskFetchTimeoutSeconds 单次上游任务状态查询的硬超时（秒）。
+// 上游 accept 后不回包时，若不设超时，单线程轮询会被永久挂住。
+var TaskFetchTimeoutSeconds int
+
+// TaskChannelFailureLimit 单渠道连续查询超时多少次后跳过本轮剩余任务（防止单个上游拖死所有渠道）。
+var TaskChannelFailureLimit int
+
 // temporary variable for sora patch, will be removed in future
 var TaskPricePatches []string
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -472,10 +473,11 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		return nil
 	}
 
-	resp, err := adaptor.FetchTask(baseURL, channelModel.Key, map[string]any{
+	// 和任务轮询共用同一套硬超时：上游挂住连接时，用户的状态查询也不能无限等待。
+	resp, err := service.FetchTaskWithTimeout(adaptor, baseURL, channelModel.Key, map[string]any{
 		"task_id": task.GetUpstreamTaskID(),
 		"action":  task.Action,
-	}, proxy)
+	}, proxy, time.Duration(constant.TaskFetchTimeoutSeconds)*time.Second)
 	if err != nil || resp == nil {
 		return nil
 	}

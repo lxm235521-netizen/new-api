@@ -154,6 +154,10 @@ func initConstantEnv() {
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
 	// 异步任务超时时间（分钟），超过此时间未完成的任务将被标记为失败并退款。0 表示禁用。
 	constant.TaskTimeoutMinutes = GetEnvOrDefault("TASK_TIMEOUT_MINUTES", 1440)
+	// 单次上游任务状态查询的硬超时（秒）。上游挂住连接时，没有超时的查询会让轮询协程永久阻塞。
+	constant.TaskFetchTimeoutSeconds = GetEnvOrDefault("TASK_FETCH_TIMEOUT_SECONDS", 30)
+	// 单个渠道连续查询超时多少次后跳过本轮剩余任务，避免一个坏上游拖死所有渠道的轮询。
+	constant.TaskChannelFailureLimit = GetEnvOrDefault("TASK_CHANNEL_FAILURE_LIMIT", 3)
 
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {
