@@ -46,6 +46,7 @@ const HistoryPanel = ({
   onOnlyCurrentModelChange,
   onRetryTask,
   onOpenTask,
+  tokenKey,
 }) => {
   const { t } = useTranslation();
 
@@ -119,6 +120,7 @@ const HistoryPanel = ({
               task={task}
               onRetry={onRetryTask}
               onOpen={onOpenTask}
+              tokenKey={tokenKey}
             />
           ))}
         </div>

@@ -247,11 +247,26 @@ export function parseProgress(progress) {
   return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0;
 }
 
+/** 上游 task.Data 可能是对象，也可能是 JSON 字符串 */
+function parseTaskData(data) {
+  if (!data) return {};
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data) || {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof data === 'object' ? data : {};
+}
+
 /**
  * 把后端历史任务记录（dto.TaskDto）转成卡片 / 详情需要的形状。
  *
- * resultUrl 直接用后端给的地址（完成时是 video_url / 代理地址），
- * 前端只负责播放，不把视频下载到服务器。
+ * resultUrl：后端拼的代理地址（/v1/videos/{id}/content），稳定但可能被上游限流。
+ * directUrl：上游返回的原始结果地址（如七牛签名直链），优先用于播放/下载，
+ *            因为它不需要经过 new-api 代理，也不会占用渠道的 finished-task 配额；
+ *            缺点是会过期，失效后由代理地址兜底。
  *
  * 提交参数来自 properties.request（老任务没有该字段，全部按空值处理）。
  */
@@ -260,6 +275,11 @@ export function mapTaskDtoToTask(dto, models = []) {
   const request = properties.request || {};
   const modelName = properties.origin_model_name || '';
   const matched = models.find((item) => item.value === modelName);
+  const upstreamData = parseTaskData(dto.data);
+  const directUrl =
+    typeof upstreamData.result_url === 'string'
+      ? upstreamData.result_url.trim()
+      : '';
 
   const asList = (value) => (Array.isArray(value) ? value : []);
   const images = asList(request.images);
@@ -287,6 +307,8 @@ export function mapTaskDtoToTask(dto, models = []) {
     // 有参考图时拿第一张当封面（视频首帧由 <video preload="metadata"> 自己出）
     thumbnailUrl: images[0] || '',
     resultUrl: dto.result_url || '',
+    // 图片任务保持原有代理逻辑，不启用直链
+    directUrl: isImage ? '' : directUrl,
     durationSeconds: request.duration || 0,
     // 图片模型的「比例」是走 size 字段提交的（16:9 这种），视频模型才用 aspect_ratio
     aspectRatio: request.aspect_ratio || (isImage ? request.size || '' : ''),
@@ -344,7 +366,23 @@ export function taskCostQuota(task) {
 }
 
 /**
- * 播放/显示/下载用的地址。
+ * 播放/显示地址。
+ *
+ * 优先用上游返回的直链（task.directUrl，例如七牛签名地址）：
+ * 它由浏览器直接访问，不经过 new-api，不会因为代理的上游限流而失败。
+ * 直链过期或不存在时，回退到后端代理地址。
+ */
+export function resolvePlaybackUrl(task) {
+  // 图片任务保持原有代理逻辑；只有视频任务优先直链
+  if (task?.kind !== 'image') {
+    const direct = String(task?.directUrl || '').trim();
+    if (direct) return direct;
+  }
+  return resolveProxyPlaybackUrl(task);
+}
+
+/**
+ * 后端代理地址（兜底）。
  *
  * 后端把完成的任务统一代理到自己身上：视频是 `/v1/videos/{task_id}/content`，
  * 图片是 `/v1/images/tasks/{task_id}/content`；库里存的是带域名的绝对地址。
@@ -354,7 +392,7 @@ export function taskCostQuota(task) {
  *
  * 所以：只要发现是本站的代理地址，就改写成**同源相对路径**，一切跟着当前访问地址走。
  */
-export function resolvePlaybackUrl(task) {
+export function resolveProxyPlaybackUrl(task) {
   const url = task?.resultUrl || '';
   if (!url) return '';
 
@@ -374,10 +412,10 @@ export function resolvePlaybackUrl(task) {
  *
  * 生成出来的原图有 2~3MB，而卡片上只显示一两百像素宽 —— 直接回原图，首屏要白等
  * 好几秒。图片任务因此带 ?w=480（服务端解码缩放 + 内存缓存）；视频任务没有缩略图
- * 接口，保持原样。详情大图、下载仍用 resolvePlaybackUrl 取原图。
+ * 接口，保持原样。详情大图、下载仍用 resolvePlaybackUrl 取原图/直链。
  */
 export function resolveThumbUrl(task) {
-  const url = resolvePlaybackUrl(task);
+  const url = resolveProxyPlaybackUrl(task);
   if (!url || task?.kind !== 'image') return url;
   return `${url}${url.includes('?') ? '&' : '?'}w=480`;
 }

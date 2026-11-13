@@ -159,12 +159,14 @@ export async function fetchImageTask(tokenKey, taskId) {
 /**
  * 查询单个任务：GET /v1/videos/{task_id}
  *
- * 完成时返回里带 video_url —— 直接用它播放，**不把视频下载到本服务器**。
+ * 完成时返回里通常带 result_url（上游直链）和 video_url/object（new-api 代理）。
+ * 前端优先用 result_url 直连，拿不到时再退回 video_url 代理。
  */
-export async function fetchVideoTask(tokenKey, taskId) {
+export async function fetchVideoTask(tokenKey, taskId, options = {}) {
   const res = await fetch(`/v1/videos/${encodeURIComponent(taskId)}`, {
     method: 'GET',
     headers: authHeaders(tokenKey),
+    signal: options.signal,
   });
 
   if (!res.ok) {
@@ -179,8 +181,32 @@ export async function fetchVideoTask(tokenKey, taskId) {
     progress: Number(data.progress) || 0,
     model: data.model,
     createdAt: data.created_at,
-    videoUrl: data.video_url || '',
+    resultUrl: data.result_url || '',
+    videoUrl: data.video_url || data.object || '',
   };
+}
+
+/**
+ * 查询 /v1/videos/{task_id}，只取上游直链 result_url。
+ * 仅用于视频任务；图片任务保持原有代理逻辑，不查直链。
+ * 拿不到就返回空串，由调用方退回缓存/代理地址。
+ */
+export async function fetchTaskPlaybackUrl(task, tokenKey) {
+  if (!task?.taskId || !tokenKey || task.kind === 'image') return '';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const data = await fetchVideoTask(tokenKey, task.taskId, {
+      signal: controller.signal,
+    });
+    return data.resultUrl || '';
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

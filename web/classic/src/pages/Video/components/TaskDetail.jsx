@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Modal, Progress, Tag, Typography } from '@douyinfe/semi-ui';
 import {
@@ -29,6 +29,8 @@ import {
   Video as VideoIcon,
 } from 'lucide-react';
 import { renderQuota, showError } from '../../../helpers';
+import { fetchTaskPlaybackUrl } from '../api';
+import { downloadTaskResult } from '../download';
 import { TASK_STATUS_PRESENTATION } from '../constants';
 import {
   countReferences,
@@ -36,6 +38,7 @@ import {
   formatDateTime,
   formatElapsed,
   resolvePlaybackUrl,
+  resolveProxyPlaybackUrl,
   taskCostQuota,
 } from '../utils';
 
@@ -105,7 +108,31 @@ function buildParams(task, t) {
 }
 
 /** 左侧：结果预览（视频 / 图片 / 进度 / 失败原因） */
-function DetailPreview({ task, t }) {
+function DetailPreview({ task, t, tokenKey }) {
+  const [fetchedUrl, setFetchedUrl] = useState('');
+  const [useProxy, setUseProxy] = useState(false);
+
+  // 打开详情时查一次 /v1/videos/{task_id}，优先拿 result_url 直链；
+  // 查不到就用任务列表里缓存的直链/代理地址。图片任务不查直链。
+  useEffect(() => {
+    if (task.kind === 'image') return undefined;
+
+    let cancelled = false;
+    setFetchedUrl('');
+    setUseProxy(false);
+
+    fetchTaskPlaybackUrl(task, tokenKey).then((url) => {
+      if (cancelled || !url) return;
+      setFetchedUrl(url);
+      // 拿到新直链后重新尝试直链，避免旧直链先报错把状态锁在代理上
+      setUseProxy(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.taskId, task.kind, tokenKey]);
+
   const isPending = [
     'QUEUED',
     'SUBMITTED',
@@ -124,13 +151,20 @@ function DetailPreview({ task, t }) {
     );
   }
 
-  const playbackUrl = resolvePlaybackUrl(task);
+  const playbackUrl = useProxy
+    ? resolveProxyPlaybackUrl(task)
+    : fetchedUrl || resolvePlaybackUrl(task);
+
+  const handleMediaError = () => {
+    // 直链过期/被上游拒绝时，回退到同源代理地址
+    if (!useProxy) setUseProxy(true);
+  };
 
   if (task.resultUrl && task.kind === 'image') {
     return <img className='wb-detail__media' src={playbackUrl} alt='' />;
   }
 
-  if (task.resultUrl) {
+  if (task.resultUrl || task.directUrl) {
     return (
       <video
         className='wb-detail__media'
@@ -139,6 +173,7 @@ function DetailPreview({ task, t }) {
         controls
         playsInline
         preload='metadata'
+        onError={handleMediaError}
       />
     );
   }
@@ -170,7 +205,7 @@ function DetailPreview({ task, t }) {
  * 成功后可在这里播放/下载结果，并把整份配置（模型 + 提示词 + 参数 + 参考素材）
  * 一键载回右侧表单重新生成。
  */
-const TaskDetail = ({ task, visible, onClose, onReuse }) => {
+const TaskDetail = ({ task, visible, onClose, onReuse, tokenKey }) => {
   const { t } = useTranslation();
   const [downloading, setDownloading] = useState(false);
 
@@ -181,25 +216,11 @@ const TaskDetail = ({ task, visible, onClose, onReuse }) => {
   const title = task.id ? t('任务 #{{id}}', { id: task.id }) : task.taskId;
 
   const handleDownload = async () => {
-    if (!task.resultUrl) return;
+    if (!task.resultUrl && !task.directUrl) return;
     setDownloading(true);
     try {
-      // 结果 URL 需要登录态，先取回 blob 再触发下载；跨域被拦时退回新标签页打开
-      const res = await fetch(resolvePlaybackUrl(task), {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = `${task.taskId}.${
-        (blob.type.split('/')[1] || 'mp4').split(';')[0]
-      }`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
+      // 优先 result_url；失败后自动用「new-api 地址 + 令牌」重试，见 download.js
+      await downloadTaskResult(task, { tokenKey });
     } catch (error) {
       showError(error?.message || t('下载失败'));
       window.open(resolvePlaybackUrl(task), '_blank');
@@ -232,7 +253,12 @@ const TaskDetail = ({ task, visible, onClose, onReuse }) => {
     >
       <div className='wb-detail'>
         <div className='wb-detail__left'>
-          <DetailPreview task={task} t={t} />
+          <DetailPreview
+            key={task.taskId}
+            task={task}
+            t={t}
+            tokenKey={tokenKey}
+          />
         </div>
 
         <div className='wb-detail__right'>
@@ -311,7 +337,7 @@ const TaskDetail = ({ task, visible, onClose, onReuse }) => {
           type='primary'
           icon={<Download size={14} />}
           loading={downloading}
-          disabled={!task.resultUrl}
+          disabled={!task.resultUrl && !task.directUrl}
           onClick={handleDownload}
         >
           {t('下载结果')}

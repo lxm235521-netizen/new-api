@@ -278,7 +278,9 @@ const VideoWorkbench = () => {
             ...task,
             status: mapGatewayStatus(hit.data.status),
             progress: hit.data.progress ?? task.progress,
-            // 完成时直接用 video_url，不把视频下载到服务器
+            // result_url 是上游直链，优先用于播放/下载；video_url 是代理，作为兜底
+            directUrl:
+              task.kind === 'image' ? '' : hit.data.resultUrl || task.directUrl,
             resultUrl: hit.data.videoUrl || task.resultUrl,
             isLocal: false,
           };
@@ -555,6 +557,7 @@ const VideoWorkbench = () => {
           onOnlyCurrentModelChange={setOnlyCurrentModel}
           onRetryTask={loadTaskConfig}
           onOpenTask={setDetailTask}
+          tokenKey={token?.key || ''}
         />
 
         <div className='wb-side'>
@@ -611,6 +614,7 @@ const VideoWorkbench = () => {
         visible={detailTask !== null}
         onClose={() => setDetailTask(null)}
         onReuse={loadTaskConfig}
+        tokenKey={token?.key || ''}
       />
     </div>
   );

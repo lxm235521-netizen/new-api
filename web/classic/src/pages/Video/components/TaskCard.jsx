@@ -30,13 +30,15 @@ import {
   RotateCcw,
   Video as VideoIcon,
 } from 'lucide-react';
-import { renderQuota } from '../../../helpers';
+import { renderQuota, showError } from '../../../helpers';
+import { downloadTaskResult } from '../download';
 import { MEDIA_KIND_LABELS, TASK_STATUS_PRESENTATION } from '../constants';
 import {
   formatClipDuration,
   formatDateTime,
   formatElapsed,
   resolvePlaybackUrl,
+  resolveProxyPlaybackUrl,
   resolveThumbUrl,
   simplifyRatio,
   taskCostQuota,
@@ -67,9 +69,12 @@ function TaskThumbnail({ task, onMediaInfo }) {
   const [inView, setInView] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
 
   const cover = task.thumbnailUrl || '';
-  const src = resolvePlaybackUrl(task);
+  const src = useProxy
+    ? resolveProxyPlaybackUrl(task)
+    : resolvePlaybackUrl(task);
   // 卡片上的图片用缩略图，别回 2~3MB 的原图
   const thumbSrc = resolveThumbUrl(task);
   const canPreview =
@@ -140,7 +145,14 @@ function TaskThumbnail({ task, onMediaInfo }) {
               height: video.videoHeight,
             });
           }}
-          onError={() => setPreviewFailed(true)}
+          onError={() => {
+            // 直链过期/失效时退回同源代理；代理也失败就不再挂预览
+            if (!useProxy && task.directUrl) {
+              setUseProxy(true);
+            } else {
+              setPreviewFailed(true);
+            }
+          }}
         />
       )}
     </div>
@@ -178,9 +190,10 @@ function buildChips(task, mediaInfo, t) {
  *
  * 整张卡片可点击打开详情，卡片内的按钮自行阻止冒泡。
  */
-const TaskCard = ({ task, onRetry, onOpen }) => {
+const TaskCard = ({ task, onRetry, onOpen, tokenKey }) => {
   const { t } = useTranslation();
   const [mediaInfo, setMediaInfo] = useState(null);
+  const [downloading, setDownloading] = useState(false);
   const status =
     TASK_STATUS_PRESENTATION[task.status] || TASK_STATUS_PRESENTATION.NOT_START;
   const isPending = PENDING_STATUSES.includes(task.status);
@@ -188,12 +201,25 @@ const TaskCard = ({ task, onRetry, onOpen }) => {
   // 图片结果是静态图，没有「播放」这回事
   const playable =
     task.kind === 'video' &&
-    Boolean(task.resultUrl) &&
+    Boolean(task.resultUrl || task.directUrl) &&
     task.status === 'SUCCESS';
 
   const handleOpen = () => onOpen?.(task);
   const stop = (event) => event.stopPropagation();
   const chips = buildChips(task, mediaInfo, t);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadTaskResult(task, { tokenKey });
+    } catch (error) {
+      showError(error?.message || t('下载失败'));
+      // 全部候选都失败时，退回原来的行为：新标签页打开结果地址
+      window.open(resolvePlaybackUrl(task), '_blank');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <article
@@ -309,17 +335,17 @@ const TaskCard = ({ task, onRetry, onOpen }) => {
                 />
               </Tooltip>
             )}
-            {task.resultUrl && (
+            {(task.resultUrl || task.directUrl) && (
               <Tooltip content={t('下载')}>
                 <Button
                   theme='borderless'
                   type='tertiary'
                   size='small'
+                  loading={downloading}
+                  disabled={downloading}
                   icon={<Download size={15} />}
                   aria-label={t('下载')}
-                  onClick={() =>
-                    window.open(resolvePlaybackUrl(task), '_blank')
-                  }
+                  onClick={handleDownload}
                 />
               </Tooltip>
             )}
