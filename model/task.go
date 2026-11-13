@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -11,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"gorm.io/gorm"
 )
 
 type TaskStatus string
@@ -210,6 +212,9 @@ type SyncTaskQueryParams struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+	// Username 按用户名筛选任务。默认精确匹配；输入中包含 % 时按 LIKE 模糊匹配
+	// （与通用日志的 username 过滤规则一致）。
+	Username string
 	// ExcludePlatform 排除某个平台。图片生成任务属于「绘图日志」，
 	// 用 exclude_platform=image 把任务日志里的图片记录去掉。
 	ExcludePlatform string
@@ -296,12 +301,39 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	return tasks
 }
 
+// applyTaskUsernameFilter 把用户名条件转成 user_id 子查询。
+// 返回 ok=false 表示搜索模式非法（例如 %%），调用方直接返回空结果。
+func applyTaskUsernameFilter(query *gorm.DB, username string) (*gorm.DB, bool) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return query, true
+	}
+
+	userQuery := DB.Model(&User{}).Select("id")
+	if strings.Contains(username, "%") {
+		pattern, err := sanitizeLikePattern(username)
+		if err != nil {
+			return nil, false
+		}
+		userQuery = userQuery.Where("username LIKE ? ESCAPE '!'", pattern)
+	} else {
+		userQuery = userQuery.Where("username = ?", username)
+	}
+
+	return query.Where("user_id IN (?)", userQuery), true
+}
+
 func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*Task {
 	var tasks []*Task
 	var err error
 
 	// 初始化查询构建器
 	query := DB
+
+	query, ok := applyTaskUsernameFilter(query, queryParams.Username)
+	if !ok {
+		return nil
+	}
 
 	// 添加过滤条件
 	if queryParams.ChannelID != "" {
@@ -549,6 +581,12 @@ type TaskQuotaUsage struct {
 func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	var total int64
 	query := DB.Model(&Task{})
+
+	query, ok := applyTaskUsernameFilter(query, queryParams.Username)
+	if !ok {
+		return 0
+	}
+
 	if queryParams.ChannelID != "" {
 		query = query.Where("channel_id = ?", queryParams.ChannelID)
 	}

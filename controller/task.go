@@ -33,6 +33,7 @@ func GetAllTask(c *gin.Context) {
 		StartTimestamp:  startTimestamp,
 		EndTimestamp:    endTimestamp,
 		ChannelID:       c.Query("channel_id"),
+		Username:        c.Query("username"),
 		ExcludePlatform: c.Query("exclude_platform"),
 	}
 

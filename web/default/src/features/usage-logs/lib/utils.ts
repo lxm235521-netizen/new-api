@@ -289,6 +289,9 @@ export async function fetchLogsByCategory(
     ...(logCategory === 'task'
       ? {
           task_id: searchParams.filter as string | undefined,
+          ...(isAdmin && searchParams.username
+            ? { username: String(searchParams.username) }
+            : {}),
           status: searchParams.status as string | undefined,
         }
       : {}),

@@ -88,6 +88,7 @@ export const useTaskLogsData = () => {
   const formInitValues = {
     channel_id: '',
     task_id: '',
+    username: '',
     status: '',
     dateRange: [
       timestamp2string(zeroNow.getTime() / 1000),
@@ -203,6 +204,7 @@ export const useTaskLogsData = () => {
     return {
       channel_id: formValues.channel_id || '',
       task_id: formValues.task_id || '',
+      username: formValues.username || '',
       status: formValues.status || '',
       start_timestamp,
       end_timestamp,
@@ -230,15 +232,25 @@ export const useTaskLogsData = () => {
   // Load logs function
   const loadLogs = async (page = 1, size = pageSize) => {
     setLoading(true);
-    const { channel_id, task_id, status, start_timestamp, end_timestamp } =
-      getFormValues();
+    const {
+      channel_id,
+      task_id,
+      username,
+      status,
+      start_timestamp,
+      end_timestamp,
+    } = getFormValues();
     let localStartTimestamp = parseInt(Date.parse(start_timestamp) / 1000);
     let localEndTimestamp = parseInt(Date.parse(end_timestamp) / 1000);
     const statusParam = status ? `&status=${encodeURIComponent(status)}` : '';
+    const usernameParam =
+      isAdminUser && username
+        ? `&username=${encodeURIComponent(username)}`
+        : '';
     // 图片生成记录属于「绘图日志」，这里把 platform=image 排除掉
     const excludeImageParam = '&exclude_platform=image';
     let url = isAdminUser
-      ? `/api/task/?p=${page}&page_size=${size}&channel_id=${channel_id}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}${excludeImageParam}`
+      ? `/api/task/?p=${page}&page_size=${size}&channel_id=${channel_id}&task_id=${task_id}${usernameParam}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}${excludeImageParam}`
       : `/api/task/self?p=${page}&page_size=${size}&task_id=${task_id}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}${statusParam}${excludeImageParam}`;
     const res = await API.get(url);
     const { success, message, data } = res.data;
