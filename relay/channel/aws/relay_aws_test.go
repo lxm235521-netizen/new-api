@@ -7,11 +7,30 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestConvertToNovaRequestMovesSystemPromptOutOfMessages(t *testing.T) {
+	t.Parallel()
+
+	req := &dto.GeneralOpenAIRequest{
+		Messages: []dto.Message{
+			{Role: "system", Content: "channel prompt"},
+			{Role: "user", Content: "hello"},
+		},
+	}
+
+	novaReq := convertToNovaRequest(req)
+	require.Len(t, novaReq.System, 1)
+	require.Equal(t, "channel prompt", novaReq.System[0].Text)
+	require.Len(t, novaReq.Messages, 1)
+	require.Equal(t, "user", novaReq.Messages[0].Role)
+	require.Equal(t, "hello", novaReq.Messages[0].Content[0].Text)
+}
 
 func TestDoAwsClientRequest_AppliesRuntimeHeaderOverrideToAnthropicBeta(t *testing.T) {
 	t.Parallel()

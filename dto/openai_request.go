@@ -479,12 +479,12 @@ func (m *Message) SetToolCalls(toolCalls any) {
 }
 
 func (m *Message) StringContent() string {
-	switch m.Content.(type) {
+	switch content := m.Content.(type) {
 	case string:
-		return m.Content.(string)
+		return content
 	case []any:
 		var contentStr string
-		for _, contentItem := range m.Content.([]any) {
+		for _, contentItem := range content {
 			contentMap, ok := contentItem.(map[string]any)
 			if !ok {
 				continue
@@ -493,6 +493,14 @@ func (m *Message) StringContent() string {
 				if subStr, ok := contentMap["text"].(string); ok {
 					contentStr += subStr
 				}
+			}
+		}
+		return contentStr
+	case []MediaContent:
+		var contentStr string
+		for _, contentItem := range content {
+			if contentItem.Type == ContentTypeText {
+				contentStr += contentItem.Text
 			}
 		}
 		return contentStr
@@ -546,6 +554,11 @@ func (m *Message) ParseContent() []MediaContent {
 
 	// 尝试解析为数组
 	//var arrayContent []map[string]interface{}
+
+	if mediaContent, ok := m.Content.([]MediaContent); ok {
+		m.parsedContent = mediaContent
+		return mediaContent
+	}
 
 	arrayContent, ok := m.Content.([]any)
 	if !ok {

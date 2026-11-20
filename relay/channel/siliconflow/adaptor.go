@@ -78,16 +78,25 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	return nil
 }
 
-func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
-	// SiliconFlow requires messages array for FIM requests, even if client doesn't send it
-	if (request.Prefix != nil || request.Suffix != nil) && len(request.Messages) == 0 {
-		// Add an empty user message to satisfy SiliconFlow's requirement
-		request.Messages = []dto.Message{
-			{
-				Role:    "user",
-				Content: "",
-			},
+func hasNonSystemMessage(messages []dto.Message) bool {
+	for _, message := range messages {
+		if message.Role != "system" && message.Role != "developer" {
+			return true
 		}
+	}
+	return false
+}
+
+func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
+	// SiliconFlow requires messages array for FIM requests, even if client doesn't send it.
+	// A channel system prompt may already be present here, so check for a real
+	// non-system message instead of requiring a completely empty messages array.
+	if (request.Prefix != nil || request.Suffix != nil) && !hasNonSystemMessage(request.Messages) {
+		// Add an empty user message to satisfy SiliconFlow's requirement
+		request.Messages = append(request.Messages, dto.Message{
+			Role:    "user",
+			Content: "",
+		})
 	}
 	return request, nil
 }

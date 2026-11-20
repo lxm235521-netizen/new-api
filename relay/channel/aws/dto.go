@@ -67,6 +67,7 @@ type NovaContent struct {
 
 type NovaRequest struct {
 	SchemaVersion   string               `json:"schemaVersion"`             // 请求版本，例如 "1.0"
+	System          []NovaContent        `json:"system,omitempty"`          // 系统提示词（不能放在 messages 中）
 	Messages        []NovaMessage        `json:"messages"`                  // 对话消息列表
 	InferenceConfig *NovaInferenceConfig `json:"inferenceConfig,omitempty"` // 推理配置，可选
 }
@@ -81,17 +82,22 @@ type NovaInferenceConfig struct {
 
 // 转换OpenAI请求为Nova格式
 func convertToNovaRequest(req *dto.GeneralOpenAIRequest) *NovaRequest {
-	novaMessages := make([]NovaMessage, len(req.Messages))
-	for i, msg := range req.Messages {
-		novaMessages[i] = NovaMessage{
-			Role:    msg.Role,
-			Content: []NovaContent{{Text: msg.StringContent()}},
-		}
-	}
-
 	novaReq := &NovaRequest{
 		SchemaVersion: "messages-v1",
-		Messages:      novaMessages,
+		Messages:      make([]NovaMessage, 0, len(req.Messages)),
+	}
+	for _, msg := range req.Messages {
+		// Nova's messages array only accepts user/assistant roles and the first
+		// message must be user. System prompts belong in the top-level `system`
+		// field, otherwise the channel system prompt would break every request.
+		if msg.Role == "system" || msg.Role == "developer" {
+			novaReq.System = append(novaReq.System, NovaContent{Text: msg.StringContent()})
+			continue
+		}
+		novaReq.Messages = append(novaReq.Messages, NovaMessage{
+			Role:    msg.Role,
+			Content: []NovaContent{{Text: msg.StringContent()}},
+		})
 	}
 
 	// 设置推理配置

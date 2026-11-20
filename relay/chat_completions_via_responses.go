@@ -18,6 +18,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// isSystemRoleMessage reports whether role should be treated as the request's
+// system prompt. Reasoning models expect the "developer" role, but clients may
+// still send "system"; the OpenAI adaptor normalizes that later, so both must
+// count as an existing system prompt here.
+func isSystemRoleMessage(role string, systemRole string) bool {
+	if role == systemRole {
+		return true
+	}
+	return systemRole == "developer" && role == "system"
+}
+
 func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) {
 	if info == nil || request == nil {
 		return
@@ -30,7 +41,7 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 
 	containSystemPrompt := false
 	for _, message := range request.Messages {
-		if message.Role == systemRole {
+		if isSystemRoleMessage(message.Role, systemRole) {
 			containSystemPrompt = true
 			break
 		}
@@ -50,7 +61,7 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, true)
 	for i, message := range request.Messages {
-		if message.Role != systemRole {
+		if !isSystemRoleMessage(message.Role, systemRole) {
 			continue
 		}
 		if message.IsStringContent() {
@@ -58,13 +69,22 @@ func applySystemPromptIfNeeded(c *gin.Context, info *relaycommon.RelayInfo, requ
 			return
 		}
 		contents := message.ParseContent()
+		systemPrompt := info.ChannelSetting.SystemPrompt
+		if len(contents) > 0 {
+			// Keep the same separator as the string-content branch.
+			systemPrompt += "\n"
+		}
 		contents = append([]dto.MediaContent{
 			{
 				Type: dto.ContentTypeText,
-				Text: info.ChannelSetting.SystemPrompt,
+				Text: systemPrompt,
 			},
 		}, contents...)
-		request.Messages[i].Content = contents
+		// SetMediaContent keeps parsedContent in sync with Content. Assigning
+		// Content directly would leave a stale parsedContent cache, so protocol
+		// conversions that call ParseContent (Claude/multi-modal) would silently
+		// drop the channel prompt.
+		request.Messages[i].SetMediaContent(contents)
 		return
 	}
 }
