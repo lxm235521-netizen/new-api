@@ -37,8 +37,11 @@ type Pricing struct {
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	// PriceUnit 固定价格模型的计费单位：per_call / per_second，空表示未显式配置（前端按「次」展示）。
-	PriceUnit      string `json:"price_unit,omitempty"`
-	PricingVersion string `json:"pricing_version,omitempty"`
+	PriceUnit string `json:"price_unit,omitempty"`
+	// ResolutionPrice 按分辨率档位配置的绝对单价（键为 720p/1080p/4k 等，
+	// 单位跟随 PriceUnit：per_call 为每次价，per_second 为每秒价）。
+	ResolutionPrice map[string]float64 `json:"resolution_price,omitempty"`
+	PricingVersion  string             `json:"pricing_version,omitempty"`
 }
 
 type PricingVendor struct {
@@ -347,6 +350,10 @@ func updatePricing() {
 				unit = billing_setting.PriceUnitPerCall
 			}
 			pricing.PriceUnit = unit
+		}
+		// 按分辨率定价：与固定价格/倍率无关，配置了就在模型广场展示各档位单价。
+		if resolutionPrices := billing_setting.GetResolutionPrices(model); len(resolutionPrices) > 0 {
+			pricing.ResolutionPrice = resolutionPrices
 		}
 		pricingMap = append(pricingMap, pricing)
 	}

@@ -24,6 +24,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { ResolutionPricingCard } from './resolution-pricing-card'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -117,6 +118,15 @@ const MODELS_SECTIONS = [
           'grok.violation_deduction_amount':
             settings['grok.violation_deduction_amount'] ?? 0.05,
         }}
+      />
+    ),
+  },
+  {
+    id: 'resolution-pricing',
+    titleKey: 'Resolution Pricing',
+    build: (settings: ModelSettings) => (
+      <ResolutionPricingCard
+        defaultValue={settings['billing_setting.resolution_price']}
       />
     ),
   },

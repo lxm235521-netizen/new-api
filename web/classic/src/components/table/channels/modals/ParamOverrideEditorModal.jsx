@@ -75,6 +75,7 @@ const OPERATION_MODE_VALUES = new Set(
 
 const CONDITION_MODE_OPTIONS = [
   { label: '完全匹配', value: 'full' },
+  { label: '完全匹配（忽略大小写）', value: 'ieq' },
   { label: '前缀匹配', value: 'prefix' },
   { label: '后缀匹配', value: 'suffix' },
   { label: '包含', value: 'contains' },

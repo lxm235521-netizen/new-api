@@ -32,6 +32,8 @@ const EMPTY_MODEL = {
   billingMode: 'per-token',
   fixedPrice: '',
   priceUnit: 'per_call',
+  // 按分辨率定价（仅固定价格模型使用）：[{ resolution, price }]
+  resolutionPrices: [],
   inputPrice: '',
   completionPrice: '',
   lockedCompletionRatio: '',
@@ -122,6 +124,71 @@ const normalizeCompletionRatioMeta = (rawMeta) => {
   };
 };
 
+const RESOLUTION_SORT_WEIGHTS = {
+  '240p': 240,
+  '360p': 360,
+  '480p': 480,
+  '540p': 540,
+  '720p': 720,
+  '768p': 768,
+  '1080p': 1080,
+  '1440p': 1440,
+  '2k': 1440,
+  '4k': 2160,
+  '8k': 4320,
+};
+
+const resolutionSortValue = (label) => {
+  const normalized = String(label || '')
+    .trim()
+    .toLowerCase();
+  if (RESOLUTION_SORT_WEIGHTS[normalized] !== undefined) {
+    return RESOLUTION_SORT_WEIGHTS[normalized];
+  }
+  const pxMatch = normalized.match(/^(\d+)p$/);
+  if (pxMatch) return Number(pxMatch[1]);
+  const kMatch = normalized.match(/^(\d+)k$/);
+  if (kMatch) return Number(kMatch[1]) * 540;
+  return Number.MAX_SAFE_INTEGER;
+};
+
+// 把 resolution_price 的 { 档位: 单价 } 映射转为可编辑的行，按档位升序
+const buildResolutionPriceRows = (table) => {
+  if (!table || typeof table !== 'object') {
+    return [];
+  }
+  return Object.entries(table)
+    .filter(
+      ([label, price]) =>
+        String(label || '').trim() && Number.isFinite(Number(price)),
+    )
+    .sort((a, b) => resolutionSortValue(a[0]) - resolutionSortValue(b[0]))
+    .map(([label, price]) => ({
+      resolution: String(label).trim(),
+      price: toNumericString(price),
+    }));
+};
+
+// 行数据 → resolution_price 的 { 档位: 单价 }；没有有效档位时返回 null
+const buildResolutionPricePayload = (model) => {
+  const rows = Array.isArray(model?.resolutionPrices)
+    ? model.resolutionPrices
+    : [];
+  const seen = new Set();
+  const payload = {};
+  for (const row of rows) {
+    const label = String(row?.resolution || '')
+      .trim()
+      .toLowerCase();
+    if (!label || seen.has(label)) continue;
+    const price = toNumberOrNull(row?.price);
+    if (price === null || price < 0) continue;
+    seen.add(label);
+    payload[label] = price;
+  }
+  return Object.keys(payload).length > 0 ? payload : null;
+};
+
 const buildModelState = (name, sourceMaps) => {
   const billingMode = sourceMaps.ModelBillingMode?.[name];
   if (billingMode === 'tiered_expr') {
@@ -166,6 +233,9 @@ const buildModelState = (name, sourceMaps) => {
     fixedPrice,
     priceUnit:
       sourceMaps.PriceUnit?.[name] === 'per_second' ? 'per_second' : 'per_call',
+    resolutionPrices: buildResolutionPriceRows(
+      sourceMaps.ResolutionPrice?.[name],
+    ),
     inputPrice,
     completionRatioLocked: completionRatioMeta.locked,
     lockedCompletionRatio: completionRatioMeta.ratio,
@@ -228,7 +298,8 @@ const buildModelState = (name, sourceMaps) => {
 
 export const isBasePricingUnset = (model) =>
   model.billingMode !== 'tiered_expr' &&
-  !hasValue(model.fixedPrice) && !hasValue(model.inputPrice);
+  !hasValue(model.fixedPrice) &&
+  !hasValue(model.inputPrice);
 
 export const getModelWarnings = (model, t) => {
   if (!model) {
@@ -294,8 +365,8 @@ export const getModelWarnings = (model, t) => {
 export const buildSummaryText = (model, t) => {
   const requestRuleSuffix =
     model.billingMode === 'tiered_expr' && model.requestRuleExpr
-    ? `，${t('请求规则')}`
-    : '';
+      ? `，${t('请求规则')}`
+      : '';
   if (model.billingMode === 'tiered_expr') {
     const expr = model.billingExpr;
     if (!expr) return `${t('表达式计费')}${requestRuleSuffix}`;
@@ -307,10 +378,16 @@ export const buildSummaryText = (model, t) => {
   }
 
   if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
+    const tierCount = Array.isArray(model.resolutionPrices)
+      ? model.resolutionPrices.filter(
+          (row) => String(row.resolution || '').trim() && hasValue(row.price),
+        ).length
+      : 0;
+    const tierSuffix = tierCount > 0 ? ` · ${tierCount} ${t('档分辨率')}` : '';
     if (model.priceUnit === 'per_second') {
-      return `${t('按秒')} $${model.fixedPrice} / ${t('秒')}${requestRuleSuffix}`;
+      return `${t('按秒')} $${model.fixedPrice} / ${t('秒')}${tierSuffix}${requestRuleSuffix}`;
     }
-    return `${t('按次')} $${model.fixedPrice} / ${t('次')}${requestRuleSuffix}`;
+    return `${t('按次')} $${model.fixedPrice} / ${t('次')}${tierSuffix}${requestRuleSuffix}`;
   }
 
   if (hasValue(model.inputPrice)) {
@@ -338,6 +415,8 @@ export const buildOptionalFieldToggles = (model) => ({
   imagePrice: hasValue(model.imagePrice),
   audioInputPrice: hasValue(model.audioInputPrice),
   audioOutputPrice: hasValue(model.audioOutputPrice),
+  resolutionPrice:
+    Array.isArray(model.resolutionPrices) && model.resolutionPrices.length > 0,
 });
 
 const serializeModel = (model, t) => {
@@ -652,9 +731,16 @@ export function useModelPricingEditorState({
       ImageRatio: parseOptionJSON(options.ImageRatio),
       AudioRatio: parseOptionJSON(options.AudioRatio),
       AudioCompletionRatio: parseOptionJSON(options.AudioCompletionRatio),
-      ModelBillingMode: parseOptionJSON(options['billing_setting.billing_mode']),
-      ModelBillingExpr: parseOptionJSON(options['billing_setting.billing_expr']),
+      ModelBillingMode: parseOptionJSON(
+        options['billing_setting.billing_mode'],
+      ),
+      ModelBillingExpr: parseOptionJSON(
+        options['billing_setting.billing_expr'],
+      ),
       PriceUnit: parseOptionJSON(options['billing_setting.price_unit']),
+      ResolutionPrice: parseOptionJSON(
+        options['billing_setting.resolution_price'],
+      ),
     };
 
     const names = new Set([
@@ -671,6 +757,7 @@ export function useModelPricingEditorState({
       ...Object.keys(sourceMaps.ModelBillingMode),
       ...Object.keys(sourceMaps.ModelBillingExpr),
       ...Object.keys(sourceMaps.PriceUnit),
+      ...Object.keys(sourceMaps.ResolutionPrice),
     ]);
 
     const nextModels = Array.from(names)
@@ -799,17 +886,72 @@ export function useModelPricingEditorState({
     }));
   };
 
+  // ---- 按分辨率定价（仅固定价格模型）----
+  const handleResolutionPriceChange = (index, field, value) => {
+    if (!selectedModel) return;
+    // 价格只允许数字；档位名允许自由输入（后端会归一化 720P/1280x720 等）
+    if (field === 'price' && !NUMERIC_INPUT_REGEX.test(value)) {
+      return;
+    }
+    upsertModel(selectedModel.name, (model) => {
+      const rows = Array.isArray(model.resolutionPrices)
+        ? [...model.resolutionPrices]
+        : [];
+      if (!rows[index]) return model;
+      rows[index] = { ...rows[index], [field]: value };
+      return { ...model, resolutionPrices: rows };
+    });
+  };
+
+  const handleAddResolutionPrice = (resolution = '') => {
+    if (!selectedModel) return;
+    upsertModel(selectedModel.name, (model) => {
+      const rows = Array.isArray(model.resolutionPrices)
+        ? [...model.resolutionPrices]
+        : [];
+      rows.push({ resolution, price: '' });
+      return { ...model, resolutionPrices: rows };
+    });
+    updateOptionalFieldToggle(selectedModel.name, 'resolutionPrice', true);
+  };
+
+  const handleRemoveResolutionPrice = (index) => {
+    if (!selectedModel) return;
+    upsertModel(selectedModel.name, (model) => {
+      const rows = Array.isArray(model.resolutionPrices)
+        ? model.resolutionPrices.filter((_, rowIndex) => rowIndex !== index)
+        : [];
+      return { ...model, resolutionPrices: rows };
+    });
+  };
+
   const handleOptionalFieldToggle = (field, checked) => {
     if (!selectedModel) return;
 
     updateOptionalFieldToggle(selectedModel.name, field, checked);
 
     if (checked) {
+      // 打开「按分辨率定价」时先补一行空白档位，省去再点一次「添加档位」
+      if (
+        field === 'resolutionPrice' &&
+        (!Array.isArray(selectedModel.resolutionPrices) ||
+          selectedModel.resolutionPrices.length === 0)
+      ) {
+        upsertModel(selectedModel.name, (model) => ({
+          ...model,
+          resolutionPrices: [{ resolution: '', price: '' }],
+        }));
+      }
       return;
     }
 
     upsertModel(selectedModel.name, (model) => {
       const nextModel = { ...model, [field]: '' };
+
+      if (field === 'resolutionPrice') {
+        // 关闭即清空，保存时不会写入任何分辨率配置
+        nextModel.resolutionPrices = [];
+      }
 
       if (field === 'audioInputPrice') {
         nextModel.audioOutputPrice = '';
@@ -980,6 +1122,10 @@ export function useModelPricingEditorState({
           ...model,
           billingMode: selectedModel.billingMode,
           fixedPrice: selectedModel.fixedPrice,
+          priceUnit: selectedModel.priceUnit,
+          resolutionPrices: Array.isArray(selectedModel.resolutionPrices)
+            ? selectedModel.resolutionPrices.map((row) => ({ ...row }))
+            : [],
           inputPrice: selectedModel.inputPrice,
           completionPrice: selectedModel.completionPrice,
           cachePrice: selectedModel.cachePrice,
@@ -1022,6 +1168,7 @@ export function useModelPricingEditorState({
           audioOutputPrice:
             Boolean(sourceToggles.audioInputPrice) &&
             Boolean(sourceToggles.audioOutputPrice),
+          resolutionPrice: Boolean(sourceToggles.resolutionPrice),
         };
       });
       return next;
@@ -1059,6 +1206,15 @@ export function useModelPricingEditorState({
         'billing_setting.price_unit': {},
       };
 
+      // 按分辨率定价：整表重写；未配置（或已清空）的模型不会残留旧档位。
+      const resolutionPriceOutput = {
+        'billing_setting.resolution_price': {},
+      };
+      // 按量计费模型的档位不在这个编辑器里维护，保存时原样保留，避免误删。
+      const existingResolutionPrices = parseOptionJSON(
+        options?.['billing_setting.resolution_price'],
+      );
+
       for (const model of models) {
         if (model.billingMode === 'tiered_expr') {
           const finalBillingExpr = combineBillingExpr(
@@ -1066,8 +1222,10 @@ export function useModelPricingEditorState({
             model.requestRuleExpr,
           );
           if (finalBillingExpr) {
-            tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
-            tieredOutput['billing_setting.billing_expr'][model.name] = finalBillingExpr;
+            tieredOutput['billing_setting.billing_mode'][model.name] =
+              'tiered_expr';
+            tieredOutput['billing_setting.billing_expr'][model.name] =
+              finalBillingExpr;
           }
         }
 
@@ -1075,6 +1233,24 @@ export function useModelPricingEditorState({
         if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
           priceUnitOutput['billing_setting.price_unit'][model.name] =
             model.priceUnit === 'per_second' ? 'per_second' : 'per_call';
+        }
+
+        // 分辨率档位同样只对固定价格模型生效；没有档位就不写，完全沿用原价。
+        if (model.billingMode === 'per-request') {
+          const resolutionTiers = buildResolutionPricePayload(model);
+          if (resolutionTiers) {
+            resolutionPriceOutput['billing_setting.resolution_price'][
+              model.name
+            ] = resolutionTiers;
+          }
+        } else if (
+          existingResolutionPrices[model.name] &&
+          typeof existingResolutionPrices[model.name] === 'object'
+        ) {
+          // 按量/阶梯模型：保留原有分辨率档位，不做增删
+          resolutionPriceOutput['billing_setting.resolution_price'][
+            model.name
+          ] = existingResolutionPrices[model.name];
         }
 
         // Always serialize ratio/price values for all models (including
@@ -1109,6 +1285,12 @@ export function useModelPricingEditorState({
           }),
         ),
         ...Object.entries(priceUnitOutput).map(([key, value]) =>
+          API.put('/api/option/', {
+            key,
+            value: JSON.stringify(value, null, 2),
+          }),
+        ),
+        ...Object.entries(resolutionPriceOutput).map(([key, value]) =>
           API.put('/api/option/', {
             key,
             value: JSON.stringify(value, null, 2),
@@ -1156,6 +1338,9 @@ export function useModelPricingEditorState({
     handleNumericFieldChange,
     handleBillingModeChange,
     handlePriceUnitChange,
+    handleResolutionPriceChange,
+    handleAddResolutionPrice,
+    handleRemoveResolutionPrice,
     handleBillingExprChange,
     handleRequestRuleExprChange,
     handleSubmit,

@@ -2,6 +2,9 @@ package billing_setting
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -14,6 +17,7 @@ const (
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
 	PriceUnitField        = "price_unit"
+	ResolutionPriceField  = "resolution_price"
 
 	// PriceUnitPerCall 按次计费：模型价格就是每次的固定价格，不乘时长/尺寸等系数。
 	PriceUnitPerCall = "per_call"
@@ -29,12 +33,17 @@ type BillingSetting struct {
 	// PriceUnit 每个模型的计费单位（per_call / per_second）。
 	// 未配置时沿用旧的「任务按次计费模型名」列表行为，保证历史配置不变。
 	PriceUnit map[string]string `json:"price_unit"`
+	// ResolutionPrice 每个模型按分辨率档位配置的绝对单价。
+	// 价格单位跟随 PriceUnit：per_call 表示每次价格，per_second 表示每秒价格。
+	// 档位键不写死，480p/720p/768p/1080p/4k 等任意值都可以。
+	ResolutionPrice map[string]map[string]float64 `json:"resolution_price"`
 }
 
 var billingSetting = BillingSetting{
-	BillingMode: make(map[string]string),
-	BillingExpr: make(map[string]string),
-	PriceUnit:   make(map[string]string),
+	BillingMode:     make(map[string]string),
+	BillingExpr:     make(map[string]string),
+	PriceUnit:       make(map[string]string),
+	ResolutionPrice: make(map[string]map[string]float64),
 }
 
 func init() {
@@ -84,6 +93,147 @@ func IsPerCallPriced(model string) bool {
 	return billingSetting.PriceUnit[model] == PriceUnitPerCall
 }
 
+// NormalizeResolutionKey normalizes a resolution value into a stable key.
+// It accepts labels ("720p", "1080P", "4k", "2160p") and dimensions in any of
+// the separators providers use ("1280x720", "1920*1080", "1366×768"). The
+// vertical/min side is used, which keeps portrait sizes and common 16:9 sizes
+// on the expected tier.
+func NormalizeResolutionKey(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	if v == "" {
+		return ""
+	}
+	v = strings.ReplaceAll(v, " ", "")
+
+	sep := ""
+	switch {
+	case strings.Contains(v, "x"):
+		sep = "x"
+	case strings.Contains(v, "*"):
+		sep = "*"
+	case strings.Contains(v, "×"):
+		sep = "×"
+	}
+	if sep != "" {
+		parts := strings.SplitN(v, sep, 2)
+		if len(parts) == 2 {
+			w, errW := strconv.Atoi(parts[0])
+			h, errH := strconv.Atoi(parts[1])
+			if errW == nil && errH == nil && w > 0 && h > 0 {
+				minSide := w
+				if h < minSide {
+					minSide = h
+				}
+				switch {
+				case minSide >= 4000:
+					return "8k"
+				case minSide >= 2000:
+					return "4k"
+				case minSide >= 1440:
+					return "1440p"
+				case minSide >= 1000:
+					return "1080p"
+				case minSide >= 768:
+					return "768p"
+				case minSide >= 720:
+					return "720p"
+				case minSide >= 480:
+					return "480p"
+				default:
+					return fmt.Sprintf("%dp", minSide)
+				}
+			}
+		}
+	}
+
+	switch v {
+	case "uhd", "4k", "2160p":
+		return "4k"
+	case "fhd", "fullhd", "1080p":
+		return "1080p"
+	case "hd", "720p":
+		return "720p"
+	case "sd", "480p":
+		return "480p"
+	}
+	if strings.HasSuffix(v, "p") {
+		return v
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		return fmt.Sprintf("%dp", n)
+	}
+	return v
+}
+
+// GetResolutionPrice returns the configured absolute price for a model and
+// resolution tier. Keys are matched after normalization, so "720P", "720p"
+// and "1280x720" all resolve to the same entry.
+func GetResolutionPrice(model string, resolution string) (float64, bool) {
+	key := NormalizeResolutionKey(resolution)
+	if key == "" {
+		return 0, false
+	}
+	price, ok := GetResolutionPrices(model)[key]
+	return price, ok
+}
+
+// GetResolutionPrices returns a copy of a model's resolution price table,
+// keyed by normalized resolution label (e.g. "720p", "1080p", "4k"). Models
+// without a configured table return nil.
+//
+// 多个写法可能归一化到同一档位（例如 "2160p" 与 "4k"）。为了保证结果稳定，
+// 这里按 key 排序后遍历，"已经是规范写法"的键优先；重复项不会随机覆盖。
+func GetResolutionPrices(model string) map[string]float64 {
+	prices, ok := billingSetting.ResolutionPrice[model]
+	if !ok || len(prices) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(prices))
+	for resolution := range prices {
+		keys = append(keys, resolution)
+	}
+	sort.Strings(keys)
+
+	copied := make(map[string]float64, len(prices))
+	for _, rawResolution := range keys {
+		price := prices[rawResolution]
+		if price < 0 {
+			continue
+		}
+		key := NormalizeResolutionKey(rawResolution)
+		if key == "" {
+			continue
+		}
+		if _, exists := copied[key]; exists && !isCanonicalResolutionKey(rawResolution) {
+			continue
+		}
+		copied[key] = price
+	}
+	if len(copied) == 0 {
+		return nil
+	}
+	return copied
+}
+
+// isCanonicalResolutionKey 判断配置里的键本身是否已经是归一化形式。
+func isCanonicalResolutionKey(rawResolution string) bool {
+	normalizedInput := strings.ToLower(strings.TrimSpace(rawResolution))
+	return normalizedInput != "" && NormalizeResolutionKey(rawResolution) == normalizedInput
+}
+
+func GetResolutionPriceCopy() map[string]map[string]float64 {
+	result := make(map[string]map[string]float64, len(billingSetting.ResolutionPrice))
+	for model, prices := range billingSetting.ResolutionPrice {
+		copied := make(map[string]float64, len(prices))
+		for resolution, price := range prices {
+			copied[resolution] = price
+		}
+		result[model] = copied
+	}
+	return result
+}
+
 func GetPricingSyncData(base map[string]any) map[string]any {
 	extra := make(map[string]any, 3)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
@@ -94,6 +244,9 @@ func GetPricingSyncData(base map[string]any) map[string]any {
 	}
 	if units := GetPriceUnitCopy(); len(units) > 0 {
 		extra[PriceUnitField] = units
+	}
+	if prices := GetResolutionPriceCopy(); len(prices) > 0 {
+		extra[ResolutionPriceField] = prices
 	}
 	return lo.Assign(base, extra)
 }

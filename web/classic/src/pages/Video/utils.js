@@ -117,14 +117,49 @@ export function effectiveBilling(model) {
  *   按秒 -> unitQuota × 时长
  *   按次 -> unitQuota
  *
+ * 模型配置了「按分辨率定价」时，先按当前选择的分辨率取对应档位的额度
+ * （后端 resolution_quota），再乘时长；没选到档位就退回基础单价。
+ *
  * 已知偏差：部分供应商的适配器还会在提交时叠加尺寸/折扣倍率
  * （例如 Sora 的尺寸倍率），这部分无法在提交前得知，预估可能略低于实扣。
  */
 export function estimateTaskQuota(model, form) {
   if (!model) return 0;
-  const unit = model.unitQuota || 0;
+  const unit = resolveUnitQuota(model, form?.resolution);
   if (effectiveBilling(model) === BILLING_MODE.PER_CALL) return unit;
   return Math.round(unit * (form.duration || 0));
+}
+
+/**
+ * 当前分辨率档位对应的单位额度；没有按分辨率定价时返回基础单价。
+ */
+export function resolveUnitQuota(model, resolution) {
+  if (!model) return 0;
+  const hit = lookupResolutionQuota(model.resolutionQuotas, resolution);
+  return hit.found ? hit.value : Number(model.unitQuota) || 0;
+}
+
+/** 该分辨率是否配置了独立单价（用于界面提示档位） */
+export function hasResolutionQuota(model, resolution) {
+  if (!model) return false;
+  return lookupResolutionQuota(model.resolutionQuotas, resolution).found;
+}
+
+/**
+ * 后端按「工作台配置的分辨率字符串」给出 resolution_quota，
+ * 这里先精确匹配，再退一步用小写匹配，兼容历史配置里的大小写差异。
+ */
+function lookupResolutionQuota(quotas, resolution) {
+  const table = quotas || {};
+  const rawKey = String(resolution || '').trim();
+  const lowerKey = rawKey.toLowerCase();
+  if (rawKey && Object.prototype.hasOwnProperty.call(table, rawKey)) {
+    return { found: true, value: Number(table[rawKey]) || 0 };
+  }
+  if (lowerKey && Object.prototype.hasOwnProperty.call(table, lowerKey)) {
+    return { found: true, value: Number(table[lowerKey]) || 0 };
+  }
+  return { found: false, value: 0 };
 }
 
 export function isSubmitDisabled(model, form) {

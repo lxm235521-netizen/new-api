@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -21,6 +22,9 @@ type WorkbenchModelDto struct {
 	UsePrice   bool    `json:"use_price"`
 	ModelPrice float64 `json:"model_price"`
 	ModelRatio float64 `json:"model_ratio"`
+	// ResolutionQuota 是按分辨率档位配置的单位额度（键为归一化档位，如 720p/1080p），
+	// 已乘分组倍率。为空表示该模型没有按分辨率定价，前端回退到 UnitQuota。
+	ResolutionQuota map[string]int `json:"resolution_quota,omitempty"`
 
 	// 以下是管理员为每个模型单独配置的参数能力
 	Duration       operation_setting.WorkbenchDuration       `json:"duration"`
@@ -77,6 +81,32 @@ func resolveWorkbenchUnitQuota(modelName string, groupRatio float64) (dto Workbe
 	}, true
 }
 
+// buildWorkbenchResolutionQuota 把模型的「按分辨率单价」换算成单位额度，
+// 与 relay 侧 ApplyTaskResolutionPrice 的公式保持一致：
+//
+//	quota = price × QuotaPerUnit × 分组倍率
+//
+// 键直接使用工作台配置里的分辨率字符串（如 "768p"、"1024x1024"），
+// 这样前端用当前选择的值就能直接查到，不用在 JS 里再复刻一遍归一化规则。
+// 没有任何档位命中时返回 nil，前端回退到基础单价。
+func buildWorkbenchResolutionQuota(modelName string, resolutions []string, groupRatio float64) map[string]int {
+	if len(resolutions) == 0 {
+		return nil
+	}
+	quotas := make(map[string]int, len(resolutions))
+	for _, resolution := range resolutions {
+		price, ok := billing_setting.GetResolutionPrice(modelName, resolution)
+		if !ok {
+			continue
+		}
+		quotas[resolution] = int(price * common.QuotaPerUnit * groupRatio)
+	}
+	if len(quotas) == 0 {
+		return nil
+	}
+	return quotas
+}
+
 // GetWorkbenchModels 返回管理员为工作台挑选的模型目录，并附带按当前用户解析的价格。
 // 目录为空时返回空列表，由前端回退到内置目录。
 func GetWorkbenchModels(c *gin.Context) {
@@ -105,6 +135,7 @@ func GetWorkbenchModels(c *gin.Context) {
 		resolved.AspectRatios = item.AspectRatios
 		resolved.References = item.References
 		resolved.PromptOptimize = item.PromptOptimize
+		resolved.ResolutionQuota = buildWorkbenchResolutionQuota(item.Model, item.Resolutions, groupRatio)
 		items = append(items, resolved)
 	}
 

@@ -592,6 +592,7 @@ func RelayTask(c *gin.Context) {
 			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 			ModelRatio:      relayInfo.PriceData.ModelRatio,
 			OtherRatios:     relayInfo.PriceData.OtherRatios,
+			Resolution:      relayInfo.PriceData.Resolution,
 			OriginModelName: relayInfo.OriginModelName,
 			PerCallBilling:  operation_setting.IsTaskPerCallBillingModel(relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		}

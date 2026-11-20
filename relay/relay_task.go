@@ -142,6 +142,14 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 		}
 	}
 
+	// 复用原任务配置时保留分辨率档位，避免 remix 请求未重复传 resolution 时
+	// 退回默认价格。
+	if bc := originTask.PrivateData.BillingContext; bc != nil && bc.Resolution != "" {
+		c.Set(service.ContextKeyBillingResolution, bc.Resolution)
+	} else if originTask.RequestSnapshot.Resolution != "" {
+		c.Set(service.ContextKeyBillingResolution, originTask.RequestSnapshot.Resolution)
+	}
+
 	return nil
 }
 
@@ -181,6 +189,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		return nil, service.TaskErrorWrapperLocal(err, "model_mapping_failed", http.StatusBadRequest)
 	}
 
+	// 2.6 用请求投影解析「参数覆盖」里的 model 改写：不读取请求体，
+	//     因此 base64 参考图导致的大请求体也能正确映射上游模型。
+	resolveTaskModelOverride(c, info)
+
 	// 3. 预生成公开 task ID（仅首次）。
 	// 异步图片这类场景会在回执里先把 ID 给客户端，这里沿用同一个，保证前后一致。
 	if info.PublicTaskID == "" {
@@ -208,6 +220,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		}
 	}
 
+	// 5.5 按分辨率配置的绝对单价：命中时覆盖基础价格，并移除适配器已有的
+	// resolution/size 倍率，避免重复计价。
+	service.ApplyTaskResolutionPrice(c, info)
+
 	// 6. 将 OtherRatios 应用到基础额度
 	if !operation_setting.IsTaskPerCallBillingModel(modelName) {
 		for _, ra := range info.PriceData.OtherRatios {
@@ -229,6 +245,14 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	requestBody, err := adaptor.BuildRequestBody(c, info)
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
+	}
+
+	// 8.5 应用渠道「参数覆盖」：JSON 请求体支持按 resolution 等字段改写上游参数
+	//     （例如不同分辨率映射到不同的上游 model）；multipart 请求体原样放行。
+	requestBody, err = applyTaskParamOverride(c, info, requestBody)
+	if err != nil {
+		// 配置类错误按本地错误处理：不惩罚/熔断渠道，也不重试
+		return nil, service.TaskErrorWrapperLocal(err, "param_override_failed", http.StatusBadRequest)
 	}
 
 	// 9. 发送请求

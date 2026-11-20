@@ -18,10 +18,13 @@ import (
 func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	tokenName := c.GetString("token_name")
 	logContent := fmt.Sprintf("操作 %s", info.Action)
-	// 支持任务仅按次计费
-	if operation_setting.IsTaskPerCallBillingModel(info.OriginModelName) || info.PriceData.UsePrice {
+	// 支持任务仅按次计费；固定价格但非按次时走按秒/系数计费。
+	if operation_setting.IsTaskPerCallBillingModel(info.OriginModelName) {
 		logContent = fmt.Sprintf("%s，按次计费", logContent)
 	} else {
+		if info.PriceData.UsePrice {
+			logContent = fmt.Sprintf("%s，按秒计费", logContent)
+		}
 		if len(info.PriceData.OtherRatios) > 0 {
 			var contents []string
 			for key, ra := range info.PriceData.OtherRatios {
@@ -38,6 +41,9 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	other["is_task"] = true
 	other["request_path"] = c.Request.URL.Path
 	other["model_price"] = info.PriceData.ModelPrice
+	if info.PriceData.Resolution != "" {
+		other["resolution"] = info.PriceData.Resolution
+	}
 	if info.PriceData.ModelRatio > 0 {
 		other["model_ratio"] = info.PriceData.ModelRatio
 	}
@@ -124,6 +130,9 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
+		if bc.Resolution != "" {
+			other["resolution"] = bc.Resolution
+		}
 		if len(bc.OtherRatios) > 0 {
 			for k, v := range bc.OtherRatios {
 				other[k] = v

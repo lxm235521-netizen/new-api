@@ -237,13 +237,27 @@ export const getPricingTableColumns = ({
       const priceItems = getModelPriceItems(priceData, t, siteDisplayType);
 
       return (
-        <div className='space-y-1'>
-          {priceItems.map((item) => (
-            <div key={item.key} className='text-gray-700'>
-              {item.label} {item.value}
-              {item.suffix}
-            </div>
-          ))}
+        <div className='space-y-1.5'>
+          {priceItems.map((item) => {
+            // 「/ 次」「/ 秒」这类短单位与价格同行显示；/1M Tokens 等长后缀另起一行
+            const compactUnit =
+              Boolean(item.suffix) && !/tokens/i.test(item.suffix);
+            return (
+              <div key={item.key} className='text-gray-700 leading-5'>
+                <span className={compactUnit ? 'whitespace-nowrap' : undefined}>
+                  {item.label} {item.value}
+                  {compactUnit ? (
+                    <span className='text-xs text-gray-500'>{item.suffix}</span>
+                  ) : null}
+                </span>
+                {!compactUnit && item.suffix ? (
+                  <span className='block text-xs text-gray-500'>
+                    {item.suffix}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       );
     },

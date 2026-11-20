@@ -595,6 +595,9 @@ func compareGjsonValues(jsonValue, targetValue gjson.Result, mode string) (bool,
 	switch mode {
 	case "full":
 		return compareEqual(jsonValue, targetValue)
+	case "ieq", "i_full", "ifull":
+		// 不区分大小写的完全匹配（例如分辨率 720P / 720p）
+		return strings.EqualFold(jsonValue.String(), targetValue.String()), nil
 	case "prefix":
 		return strings.HasPrefix(jsonValue.String(), targetValue.String()), nil
 	case "suffix":
@@ -1569,6 +1572,30 @@ func isPathBasedOperation(mode string) bool {
 	default:
 		return false
 	}
+}
+
+// ParamOverrideHasBodyOperations reports whether the override may modify the
+// request body. Header-only overrides (set_header/pass_headers/...) can be
+// applied without reading the body at all.
+func ParamOverrideHasBodyOperations(paramOverride map[string]interface{}) bool {
+	if len(paramOverride) == 0 {
+		return false
+	}
+	operations, ok := tryParseOperations(paramOverride)
+	if !ok {
+		// 旧格式：每个顶层 key 都被当成 body 字段
+		return true
+	}
+	for _, op := range operations {
+		mode := strings.ToLower(strings.TrimSpace(op.Mode))
+		if mode == "move" || mode == "copy" {
+			return true
+		}
+		if isPathBasedOperation(mode) {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveOperationPaths(data []byte, path string) ([]string, error) {

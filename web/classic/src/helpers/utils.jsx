@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { Toast, Pagination } from '@douyinfe/semi-ui';
-import { toastConstants, BILLING_PRICING_VARS, BILLING_VAR_REGEX } from '../constants';
+import {
+  toastConstants,
+  BILLING_PRICING_VARS,
+  BILLING_VAR_REGEX,
+} from '../constants';
 import React from 'react';
 import { toast } from 'react-toastify';
 import {
@@ -608,6 +612,49 @@ export const selectFilter = (input, option) => {
 
 // -------------------------------
 // 模型定价计算工具函数
+
+// 分辨率档位排序权重：480p < 720p < 768p < 1080p < 4k ...
+const RESOLUTION_SORT_WEIGHTS = {
+  '240p': 240,
+  '360p': 360,
+  '480p': 480,
+  '540p': 540,
+  '720p': 720,
+  '768p': 768,
+  '1080p': 1080,
+  '1440p': 1440,
+  '2k': 1440,
+  '4k': 2160,
+  '8k': 4320,
+};
+
+const getResolutionSortValue = (label) => {
+  const normalized = String(label || '')
+    .trim()
+    .toLowerCase();
+  if (RESOLUTION_SORT_WEIGHTS[normalized] !== undefined) {
+    return RESOLUTION_SORT_WEIGHTS[normalized];
+  }
+  const pxMatch = normalized.match(/^(\d+)p$/);
+  if (pxMatch) return Number(pxMatch[1]);
+  const kMatch = normalized.match(/^(\d+)k$/);
+  if (kMatch) return Number(kMatch[1]) * 540;
+  return Number.MAX_SAFE_INTEGER;
+};
+
+// 把后台配置的 resolution_price 表转成 [{ label, price }]，按档位升序
+const buildResolutionPrices = (record, usedGroupRatio, displayPrice) => {
+  const table = record?.resolution_price;
+  if (!table || typeof table !== 'object') return [];
+  return Object.entries(table)
+    .filter(([, value]) => Number.isFinite(Number(value)) && Number(value) >= 0)
+    .sort((a, b) => getResolutionSortValue(a[0]) - getResolutionSortValue(b[0]))
+    .map(([label, value]) => ({
+      label,
+      price: displayPrice(Number(value) * usedGroupRatio),
+    }));
+};
+
 export const calculateModelPrice = ({
   record,
   selectedGroup,
@@ -682,6 +729,11 @@ export const calculateModelPrice = ({
         audioOutputRatio: formatRatio(record.audio_completion_ratio),
         isPerToken: true,
         isTokensDisplay: true,
+        resolutionPrices: buildResolutionPrices(
+          record,
+          usedGroupRatio,
+          displayPrice,
+        ),
         usedGroup,
         usedGroupRatio,
       };
@@ -725,7 +777,9 @@ export const calculateModelPrice = ({
         ? formatTokenPrice(inputRatioPriceUSD * Number(record.cache_ratio))
         : null,
       createCachePrice: hasRatioValue(record.create_cache_ratio)
-        ? formatTokenPrice(inputRatioPriceUSD * Number(record.create_cache_ratio))
+        ? formatTokenPrice(
+            inputRatioPriceUSD * Number(record.create_cache_ratio),
+          )
         : null,
       imagePrice: hasRatioValue(record.image_ratio)
         ? formatTokenPrice(inputRatioPriceUSD * Number(record.image_ratio))
@@ -742,6 +796,11 @@ export const calculateModelPrice = ({
       unitLabel,
       isPerToken: true,
       isTokensDisplay: false,
+      resolutionPrices: buildResolutionPrices(
+        record,
+        usedGroupRatio,
+        displayPrice,
+      ),
       usedGroup,
       usedGroupRatio,
     };
@@ -751,10 +810,18 @@ export const calculateModelPrice = ({
     // 固定价格：按次或按秒（由后台「计费单位」决定）
     const priceUSD = parseFloat(record.model_price) * usedGroupRatio;
     const displayVal = displayPrice(priceUSD);
+    const priceUnit =
+      record.price_unit === 'per_second' ? 'per_second' : 'per_call';
 
     return {
       price: displayVal,
-      priceUnit: record.price_unit === 'per_second' ? 'per_second' : 'per_call',
+      priceUnit,
+      // 按分辨率定价：每个档位的绝对单价（单位同 priceUnit）
+      resolutionPrices: buildResolutionPrices(
+        record,
+        usedGroupRatio,
+        displayPrice,
+      ),
       isPerToken: false,
       isTokensDisplay: false,
       usedGroup,
@@ -772,11 +839,7 @@ export const calculateModelPrice = ({
   };
 };
 
-export const getModelPriceItems = (
-  priceData,
-  t,
-  quotaDisplayType = 'USD',
-) => {
+export const getModelPriceItems = (priceData, t, quotaDisplayType = 'USD') => {
   if (priceData.isDynamicPricing) {
     return [
       {
@@ -787,6 +850,21 @@ export const getModelPriceItems = (
         isDynamic: true,
       },
     ];
+  }
+
+  // 按分辨率定价：优先展示各档位单价（无论基础计费是固定价还是按量）
+  if (
+    Array.isArray(priceData.resolutionPrices) &&
+    priceData.resolutionPrices.length > 0
+  ) {
+    const unitSuffix =
+      priceData.priceUnit === 'per_second' ? ` / ${t('秒')}` : ` / ${t('次')}`;
+    return priceData.resolutionPrices.map((item) => ({
+      key: `resolution-${item.label}`,
+      label: item.label,
+      value: item.price,
+      suffix: unitSuffix,
+    }));
   }
 
   if (priceData.isPerToken) {
@@ -884,7 +962,10 @@ export const getModelPriceItems = (
         value: priceData.audioOutputPrice,
         suffix: unitSuffix,
       },
-    ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
+    ].filter(
+      (item) =>
+        item.value !== null && item.value !== undefined && item.value !== '',
+    );
   }
 
   return [
@@ -893,14 +974,22 @@ export const getModelPriceItems = (
       label: t('模型价格'),
       value: priceData.price,
       suffix:
-        priceData.priceUnit === 'per_second' ? ` / ${t('秒')}` : ` / ${t('次')}`,
+        priceData.priceUnit === 'per_second'
+          ? ` / ${t('秒')}`
+          : ` / ${t('次')}`,
     },
-  ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
+  ].filter(
+    (item) =>
+      item.value !== null && item.value !== undefined && item.value !== '',
+  );
 };
 
 // 格式化动态计费摘要（用于卡片视图，与 formatPriceInfo 风格统一）
 export const formatDynamicPriceSummary = (billingExpr, t, groupRatio = 1) => {
-  if (!billingExpr) return <span style={{ color: 'var(--semi-color-text-1)' }}>{t('动态计费')}</span>;
+  if (!billingExpr)
+    return (
+      <span style={{ color: 'var(--semi-color-text-1)' }}>{t('动态计费')}</span>
+    );
 
   const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
   let symbol = '$';
@@ -931,7 +1020,9 @@ export const formatDynamicPriceSummary = (billingExpr, t, groupRatio = 1) => {
 
   const varLabels = BILLING_PRICING_VARS.map((v) => [v.key, v.label]);
 
-  const hasTimeCondition = /\b(?:hour|minute|weekday|month|day)\(/.test(exprBody);
+  const hasTimeCondition = /\b(?:hour|minute|weekday|month|day)\(/.test(
+    exprBody,
+  );
   const hasRequestCondition = /\b(?:param|header)\(/.test(exprBody);
 
   const tags = [];
@@ -956,35 +1047,35 @@ export const formatDynamicPriceSummary = (billingExpr, t, groupRatio = 1) => {
         </>
       )}
       {(tierCount > 1 || hasTimeCondition || hasRequestCondition) && (
-      <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '1px 6px',
-            borderRadius: 4,
-            fontSize: 11,
-            background: 'var(--semi-color-warning-light-default)',
-            color: 'var(--semi-color-warning)',
-          }}
-        >
-          {t('动态计费')}
-        </span>
-        {tags.map((tag) => (
+        <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           <span
-            key={tag}
             style={{
               display: 'inline-block',
               padding: '1px 6px',
               borderRadius: 4,
               fontSize: 11,
-              background: 'var(--semi-color-fill-1)',
-              color: 'var(--semi-color-text-2)',
+              background: 'var(--semi-color-warning-light-default)',
+              color: 'var(--semi-color-warning)',
             }}
           >
-            {tag}
+            {t('动态计费')}
           </span>
-        ))}
-      </span>
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              style={{
+                display: 'inline-block',
+                padding: '1px 6px',
+                borderRadius: 4,
+                fontSize: 11,
+                background: 'var(--semi-color-fill-1)',
+                color: 'var(--semi-color-text-2)',
+              }}
+            >
+              {tag}
+            </span>
+          ))}
+        </span>
       )}
     </>
   );
@@ -995,12 +1086,21 @@ export const formatPriceInfo = (priceData, t, quotaDisplayType = 'USD') => {
   const items = getModelPriceItems(priceData, t, quotaDisplayType);
   return (
     <>
-      {items.map((item) => (
-        <span key={item.key} style={{ color: 'var(--semi-color-text-1)' }}>
-          {item.label} {item.value}
-          {item.suffix}
-        </span>
-      ))}
+      {items.map((item) => {
+        // 「/ 次」「/ 秒」这类短单位整行不换行；长后缀（/1M Tokens）允许自然换行
+        const compactUnit =
+          Boolean(item.suffix) && !/tokens/i.test(item.suffix);
+        return (
+          <span
+            key={item.key}
+            style={{ color: 'var(--semi-color-text-1)' }}
+            className={compactUnit ? 'whitespace-nowrap' : undefined}
+          >
+            {item.label} {item.value}
+            {item.suffix}
+          </span>
+        );
+      })}
     </>
   );
 };

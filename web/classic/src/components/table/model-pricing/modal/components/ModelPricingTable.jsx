@@ -20,7 +20,10 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Avatar, Typography, Table, Tag } from '@douyinfe/semi-ui';
 import { IconCoinMoneyStroked } from '@douyinfe/semi-icons';
-import { calculateModelPrice, getModelPriceItems } from '../../../../../helpers';
+import {
+  calculateModelPrice,
+  getModelPriceItems,
+} from '../../../../../helpers';
 
 const { Text } = Typography;
 
@@ -119,7 +122,8 @@ const ModelPricingTable = ({
       render: (text) => {
         let color = 'white';
         if (text === t('按量计费')) color = 'violet';
-        else if (text === t('按次计费') || text === t('按秒计费')) color = 'teal';
+        else if (text === t('按次计费') || text === t('按秒计费'))
+          color = 'teal';
         else if (text === t('动态计费')) color = 'amber';
         return (
           <Tag color={color} size='small' shape='circle'>
@@ -141,15 +145,31 @@ const ModelPricingTable = ({
           );
         }
         return (
-          <div className='space-y-1'>
-            {items.map((item) => (
-              <div key={item.key}>
-                <div className='font-semibold text-orange-600'>
-                  {item.label} {item.value}
+          <div className='space-y-1.5'>
+            {items.map((item) => {
+              // 「/ 次」「/ 秒」这类短单位跟价格放同一行；只有 /1M Tokens
+              // 这种长后缀才单独一行，避免窄列里被强制折行。
+              const compactUnit =
+                Boolean(item.suffix) && !/tokens/i.test(item.suffix);
+              return (
+                <div key={item.key} className='leading-5'>
+                  <span className='font-semibold text-orange-600 whitespace-nowrap'>
+                    {item.label} {item.value}
+                  </span>
+                  {item.suffix ? (
+                    compactUnit ? (
+                      <span className='text-xs text-gray-500 whitespace-nowrap'>
+                        {item.suffix}
+                      </span>
+                    ) : (
+                      <span className='block text-xs text-gray-500'>
+                        {item.suffix}
+                      </span>
+                    )
+                  ) : null}
                 </div>
-                <div className='text-xs text-gray-500'>{item.suffix}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       },

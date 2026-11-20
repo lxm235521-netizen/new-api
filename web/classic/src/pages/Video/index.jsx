@@ -72,6 +72,7 @@ import {
   effectiveBilling,
   estimateTaskQuota,
   filterTasks,
+  hasResolutionQuota,
   isReferenceEnabled,
   isSubmitDisabled,
   isTerminalStatus,
@@ -324,8 +325,15 @@ const VideoWorkbench = () => {
 
   const submitDisabled = isSubmitDisabled(model, form || { references: {} });
 
+  const hasResolutionPrice = hasResolutionQuota(model, form?.resolution);
   const billingLabel = model
-    ? t(BILLING_MODE_LABELS[effectiveBilling(model)] || '')
+    ? [
+        t(BILLING_MODE_LABELS[effectiveBilling(model)] || ''),
+        // 该分辨率有独立单价时把档位带出来，方便确认价格是按档位算的
+        hasResolutionPrice ? form.resolution : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
     : '';
 
   const handleFormChange = (patch) => {

@@ -73,6 +73,16 @@ export function buildWorkbenchModels(remoteModels) {
           : BILLING_MODE.PER_CALL,
       // unitQuota：按秒为每秒额度，按次为每次额度（后端按当前用户解析）
       unitQuota: Number(remote.unit_quota) || 0,
+      // resolutionQuotas：按工作台配置的分辨率字符串给出的单位额度（后端已乘分组倍率）
+      resolutionQuotas:
+        remote.resolution_quota && typeof remote.resolution_quota === 'object'
+          ? Object.fromEntries(
+              Object.entries(remote.resolution_quota).map(([tier, quota]) => [
+                String(tier).trim(),
+                Number(quota) || 0,
+              ]),
+            )
+          : {},
       duration: normalizeDuration(remote.duration),
       resolutions: Array.isArray(remote.resolutions) ? remote.resolutions : [],
       aspectRatios: Array.isArray(remote.aspect_ratios)

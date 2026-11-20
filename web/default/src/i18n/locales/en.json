@@ -4544,6 +4544,8 @@
     "Per call": "Per call",
     "Charged by actual generation duration.": "Charged by actual generation duration.",
     "Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.": "Prefer setting the billing unit per model under Model prices; this list is kept for backward compatibility.",
-    "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.": "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration."
+    "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.": "JSON map of model to per_call or per_second. Per-call models skip duration and size multipliers; per-second models are charged by duration.",
+    "Resolution Pricing": "Resolution Pricing",
+    "JSON map of model to resolution prices. The price unit follows the model's per-call/per-second setting. The request's resolution field is read first.": "JSON map of model to resolution prices. The price unit follows the model's per-call/per-second setting. The request's resolution field is read first."
   }
 }
