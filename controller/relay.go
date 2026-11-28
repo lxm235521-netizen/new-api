@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -587,6 +588,12 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
+		// 固定价格模型历史上也跳过差额结算；按输入视频时长计费的模型
+		// 需要保留完成阶段的结算能力（真实时长可能与预探测有差异）。
+		perCallBilling := operation_setting.IsTaskPerCallBillingModel(relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice
+		if billing_setting.IsInputVideoDurationBilling(relayInfo.OriginModelName) {
+			perCallBilling = false
+		}
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      relayInfo.PriceData.ModelPrice,
 			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
@@ -594,7 +601,7 @@ func RelayTask(c *gin.Context) {
 			OtherRatios:     relayInfo.PriceData.OtherRatios,
 			Resolution:      relayInfo.PriceData.Resolution,
 			OriginModelName: relayInfo.OriginModelName,
-			PerCallBilling:  operation_setting.IsTaskPerCallBillingModel(relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			PerCallBilling:  perCallBilling,
 		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData

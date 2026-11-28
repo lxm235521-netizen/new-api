@@ -193,6 +193,12 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	//     因此 base64 参考图导致的大请求体也能正确映射上游模型。
 	resolveTaskModelOverride(c, info)
 
+	// 2.7 按输入视频时长计费：服务端探测 videos 的真实时长并覆盖客户端
+	//     传入的 seconds/duration，避免客户端少报时长。必须在价格计算前执行。
+	if err := service.ApplyInputVideoDurationBilling(c, info, modelName); err != nil {
+		return nil, service.TaskErrorWrapperLocal(err, "input_video_duration_failed", http.StatusBadRequest)
+	}
+
 	// 3. 预生成公开 task ID（仅首次）。
 	// 异步图片这类场景会在回执里先把 ID 给客户端，这里沿用同一个，保证前后一致。
 	if info.PublicTaskID == "" {

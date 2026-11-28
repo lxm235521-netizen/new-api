@@ -90,10 +90,16 @@ const getBillingModeTagLabel = (model, t, getExprModeLabel) => {
   if (model.billingMode === 'per-request') {
     const base =
       model.priceUnit === 'per_second' ? t('按秒计费') : t('按次计费');
+    const duration =
+      model.priceUnit === 'per_second' && model.inputVideoDuration
+        ? ` · ${t('按输入时长')}`
+        : '';
     const tierCount = Array.isArray(model.resolutionPrices)
       ? model.resolutionPrices.length
       : 0;
-    return tierCount > 0 ? `${base} · ${tierCount} ${t('档')}` : base;
+    return tierCount > 0
+      ? `${base}${duration} · ${tierCount} ${t('档')}`
+      : `${base}${duration}`;
   }
   if (model.billingMode === 'tiered_expr') {
     return getExprModeLabel(model);
@@ -141,6 +147,7 @@ export default function ModelPricingEditor({
     handleNumericFieldChange,
     handleBillingModeChange,
     handlePriceUnitChange,
+    handleInputVideoDurationChange,
     handleResolutionPriceChange,
     handleAddResolutionPrice,
     handleRemoveResolutionPrice,
@@ -220,7 +227,11 @@ export default function ModelPricingEditor({
             }
           >
             {record.billingMode === 'per-request'
-              ? t('按次计费')
+              ? `${record.priceUnit === 'per_second' ? t('按秒计费') : t('按次计费')}${
+                  record.priceUnit === 'per_second' && record.inputVideoDuration
+                    ? ` · ${t('按输入时长')}`
+                    : ''
+                }`
               : record.billingMode === 'tiered_expr'
                 ? getExprModeLabel(record)
                 : t('按量计费')}
@@ -485,6 +496,40 @@ export default function ModelPricingEditor({
                         )}
                       </div>
                     </div>
+                    {selectedModel.priceUnit === 'per_second' ? (
+                      <div
+                        className='mb-4'
+                        style={{
+                          padding: '12px',
+                          borderRadius: 8,
+                          border: '1px solid var(--semi-color-border)',
+                          background: 'var(--semi-color-fill-0)',
+                        }}
+                      >
+                        <div className='flex items-center justify-between gap-3'>
+                          <div>
+                            <div className='font-medium text-gray-700'>
+                              {t('按输入视频时长计费')}
+                            </div>
+                            <div className='text-xs text-gray-500 mt-1'>
+                              {t(
+                                '开启后，服务端会读取请求 videos 中视频的真实时长并按秒计费，忽略客户端传入的 seconds；读取失败会拒绝请求。',
+                              )}
+                            </div>
+                          </div>
+                          <Switch
+                            checked={Boolean(selectedModel.inputVideoDuration)}
+                            disabled={!hasValue(selectedModel.fixedPrice)}
+                            onChange={handleInputVideoDurationChange}
+                          />
+                        </div>
+                        {!hasValue(selectedModel.fixedPrice) ? (
+                          <div className='text-xs text-gray-500 mt-2'>
+                            {t('请先填写每秒价格，再开启该开关。')}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <PriceInput
                       label={t('固定价格')}
                       value={selectedModel.fixedPrice}
@@ -501,7 +546,13 @@ export default function ModelPricingEditor({
                       onChange={(value) =>
                         handleNumericFieldChange('fixedPrice', value)
                       }
-                      extraText={t('适合 MJ / 任务类等按次收费模型。')}
+                      extraText={
+                        selectedModel.priceUnit === 'per_second'
+                          ? t(
+                              '价格为每秒单价；开启「按输入视频时长计费」后由服务端探测视频真实时长。',
+                            )
+                          : t('适合 MJ / 任务类等按次收费模型。')
+                      }
                     />
                     <ResolutionPriceEditor
                       model={selectedModel}

@@ -129,6 +129,17 @@ func validateMultipartTaskRequest(c *gin.Context, info *RelayInfo, action string
 }
 
 func ValidateMultipartDirect(c *gin.Context, info *RelayInfo) *dto.TaskError {
+	return validateMultipartDirect(c, info, true)
+}
+
+// ValidateMultipartDirectAllowEmptyPrompt is ValidateMultipartDirect without
+// the prompt requirement. It is used by video-processing models that accept a
+// bare video URL (for example subtitle removal or super resolution).
+func ValidateMultipartDirectAllowEmptyPrompt(c *gin.Context, info *RelayInfo) *dto.TaskError {
+	return validateMultipartDirect(c, info, false)
+}
+
+func validateMultipartDirect(c *gin.Context, info *RelayInfo, requirePrompt bool) *dto.TaskError {
 	var prompt string
 	var model string
 	var seconds int
@@ -159,8 +170,10 @@ func ValidateMultipartDirect(c *gin.Context, info *RelayInfo) *dto.TaskError {
 		hasInputReference = true
 	}
 
-	if taskErr := validatePrompt(prompt); taskErr != nil {
-		return taskErr
+	if requirePrompt {
+		if taskErr := validatePrompt(prompt); taskErr != nil {
+			return taskErr
+		}
 	}
 
 	action := constant.TaskActionTextGenerate

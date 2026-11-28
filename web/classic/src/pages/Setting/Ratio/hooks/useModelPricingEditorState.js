@@ -32,6 +32,8 @@ const EMPTY_MODEL = {
   billingMode: 'per-token',
   fixedPrice: '',
   priceUnit: 'per_call',
+  // 按输入视频时长计费（仅按秒计价的固定价格任务模型使用）
+  inputVideoDuration: false,
   // 按分辨率定价（仅固定价格模型使用）：[{ resolution, price }]
   resolutionPrices: [],
   inputPrice: '',
@@ -233,6 +235,7 @@ const buildModelState = (name, sourceMaps) => {
     fixedPrice,
     priceUnit:
       sourceMaps.PriceUnit?.[name] === 'per_second' ? 'per_second' : 'per_call',
+    inputVideoDuration: Boolean(sourceMaps.InputVideoDuration?.[name]),
     resolutionPrices: buildResolutionPriceRows(
       sourceMaps.ResolutionPrice?.[name],
     ),
@@ -384,8 +387,11 @@ export const buildSummaryText = (model, t) => {
         ).length
       : 0;
     const tierSuffix = tierCount > 0 ? ` · ${tierCount} ${t('档分辨率')}` : '';
+    const durationSuffix = model.inputVideoDuration
+      ? ` · ${t('按输入时长')}`
+      : '';
     if (model.priceUnit === 'per_second') {
-      return `${t('按秒')} $${model.fixedPrice} / ${t('秒')}${tierSuffix}${requestRuleSuffix}`;
+      return `${t('按秒')} $${model.fixedPrice} / ${t('秒')}${tierSuffix}${durationSuffix}${requestRuleSuffix}`;
     }
     return `${t('按次')} $${model.fixedPrice} / ${t('次')}${tierSuffix}${requestRuleSuffix}`;
   }
@@ -580,6 +586,13 @@ export const buildPreviewRows = (model, t) => {
         value: hasValue(model.fixedPrice) ? model.fixedPrice : t('空'),
       },
     ];
+    if (model.priceUnit === 'per_second' && model.inputVideoDuration) {
+      rows.push({
+        key: 'InputVideoDuration',
+        label: 'billing_setting.input_video_duration',
+        value: 'true',
+      });
+    }
     return rows;
   }
 
@@ -741,6 +754,9 @@ export function useModelPricingEditorState({
       ResolutionPrice: parseOptionJSON(
         options['billing_setting.resolution_price'],
       ),
+      InputVideoDuration: parseOptionJSON(
+        options['billing_setting.input_video_duration'],
+      ),
     };
 
     const names = new Set([
@@ -758,6 +774,7 @@ export function useModelPricingEditorState({
       ...Object.keys(sourceMaps.ModelBillingExpr),
       ...Object.keys(sourceMaps.PriceUnit),
       ...Object.keys(sourceMaps.ResolutionPrice),
+      ...Object.keys(sourceMaps.InputVideoDuration),
     ]);
 
     const nextModels = Array.from(names)
@@ -883,6 +900,18 @@ export function useModelPricingEditorState({
     upsertModel(selectedModel.name, (model) => ({
       ...model,
       priceUnit: value === 'per_second' ? 'per_second' : 'per_call',
+      // 按次计费不读时长，关闭开关避免残留一个无效配置。
+      inputVideoDuration:
+        value === 'per_second' ? Boolean(model.inputVideoDuration) : false,
+    }));
+  };
+
+  const handleInputVideoDurationChange = (checked) => {
+    if (!selectedModel) return;
+    upsertModel(selectedModel.name, (model) => ({
+      ...model,
+      inputVideoDuration:
+        model.priceUnit === 'per_second' ? Boolean(checked) : false,
     }));
   };
 
@@ -1037,6 +1066,9 @@ export function useModelPricingEditorState({
       if (value === 'tiered_expr' && !model.billingExpr) {
         next.billingExpr = 'tier("base", p * 0 + c * 0)';
       }
+      if (value !== 'per-request') {
+        next.inputVideoDuration = false;
+      }
       return next;
     });
   };
@@ -1123,6 +1155,7 @@ export function useModelPricingEditorState({
           billingMode: selectedModel.billingMode,
           fixedPrice: selectedModel.fixedPrice,
           priceUnit: selectedModel.priceUnit,
+          inputVideoDuration: selectedModel.inputVideoDuration,
           resolutionPrices: Array.isArray(selectedModel.resolutionPrices)
             ? selectedModel.resolutionPrices.map((row) => ({ ...row }))
             : [],
@@ -1206,6 +1239,11 @@ export function useModelPricingEditorState({
         'billing_setting.price_unit': {},
       };
 
+      // 按输入视频时长计费：整表重写，未开启的模型不会残留 true。
+      const inputVideoDurationOutput = {
+        'billing_setting.input_video_duration': {},
+      };
+
       // 按分辨率定价：整表重写；未配置（或已清空）的模型不会残留旧档位。
       const resolutionPriceOutput = {
         'billing_setting.resolution_price': {},
@@ -1233,6 +1271,17 @@ export function useModelPricingEditorState({
         if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
           priceUnitOutput['billing_setting.price_unit'][model.name] =
             model.priceUnit === 'per_second' ? 'per_second' : 'per_call';
+        }
+
+        if (
+          model.billingMode === 'per-request' &&
+          model.priceUnit === 'per_second' &&
+          hasValue(model.fixedPrice) &&
+          model.inputVideoDuration
+        ) {
+          inputVideoDurationOutput['billing_setting.input_video_duration'][
+            model.name
+          ] = true;
         }
 
         // 分辨率档位同样只对固定价格模型生效；没有档位就不写，完全沿用原价。
@@ -1290,6 +1339,12 @@ export function useModelPricingEditorState({
             value: JSON.stringify(value, null, 2),
           }),
         ),
+        ...Object.entries(inputVideoDurationOutput).map(([key, value]) =>
+          API.put('/api/option/', {
+            key,
+            value: JSON.stringify(value, null, 2),
+          }),
+        ),
         ...Object.entries(resolutionPriceOutput).map(([key, value]) =>
           API.put('/api/option/', {
             key,
@@ -1338,6 +1393,7 @@ export function useModelPricingEditorState({
     handleNumericFieldChange,
     handleBillingModeChange,
     handlePriceUnitChange,
+    handleInputVideoDurationChange,
     handleResolutionPriceChange,
     handleAddResolutionPrice,
     handleRemoveResolutionPrice,

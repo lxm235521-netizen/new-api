@@ -12,12 +12,13 @@ import (
 )
 
 const (
-	BillingModeRatio      = "ratio"
-	BillingModeTieredExpr = "tiered_expr"
-	BillingModeField      = "billing_mode"
-	BillingExprField      = "billing_expr"
-	PriceUnitField        = "price_unit"
-	ResolutionPriceField  = "resolution_price"
+	BillingModeRatio        = "ratio"
+	BillingModeTieredExpr   = "tiered_expr"
+	BillingModeField        = "billing_mode"
+	BillingExprField        = "billing_expr"
+	PriceUnitField          = "price_unit"
+	ResolutionPriceField    = "resolution_price"
+	InputVideoDurationField = "input_video_duration"
 
 	// PriceUnitPerCall 按次计费：模型价格就是每次的固定价格，不乘时长/尺寸等系数。
 	PriceUnitPerCall = "per_call"
@@ -26,7 +27,9 @@ const (
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
-// DB keys: billing_setting.billing_mode, billing_setting.billing_expr, billing_setting.price_unit
+// DB keys: billing_setting.billing_mode, billing_setting.billing_expr,
+// billing_setting.price_unit, billing_setting.resolution_price,
+// billing_setting.input_video_duration
 type BillingSetting struct {
 	BillingMode map[string]string `json:"billing_mode"`
 	BillingExpr map[string]string `json:"billing_expr"`
@@ -37,13 +40,17 @@ type BillingSetting struct {
 	// 价格单位跟随 PriceUnit：per_call 表示每次价格，per_second 表示每秒价格。
 	// 档位键不写死，480p/720p/768p/1080p/4k 等任意值都可以。
 	ResolutionPrice map[string]map[string]float64 `json:"resolution_price"`
+	// InputVideoDuration 标记哪些按秒计费的任务模型按“输入视频时长”计费。
+	// 开启后服务端会探测请求 videos 里的真实时长并覆盖客户端传入的 seconds。
+	InputVideoDuration map[string]bool `json:"input_video_duration"`
 }
 
 var billingSetting = BillingSetting{
-	BillingMode:     make(map[string]string),
-	BillingExpr:     make(map[string]string),
-	PriceUnit:       make(map[string]string),
-	ResolutionPrice: make(map[string]map[string]float64),
+	BillingMode:        make(map[string]string),
+	BillingExpr:        make(map[string]string),
+	PriceUnit:          make(map[string]string),
+	ResolutionPrice:    make(map[string]map[string]float64),
+	InputVideoDuration: make(map[string]bool),
 }
 
 func init() {
@@ -91,6 +98,20 @@ func IsPerSecondPriced(model string) bool {
 // IsPerCallPriced 判断模型是否显式配置为按次计费。
 func IsPerCallPriced(model string) bool {
 	return billingSetting.PriceUnit[model] == PriceUnitPerCall
+}
+
+// IsInputVideoDurationBilling 判断模型是否开启「按输入视频时长计费」。
+// 该开关只对按秒计价的模型生效；开启后由服务端探测输入视频的真实时长。
+func IsInputVideoDurationBilling(model string) bool {
+	return billingSetting.InputVideoDuration[model]
+}
+
+func GetInputVideoDurationCopy() map[string]bool {
+	copied := make(map[string]bool, len(billingSetting.InputVideoDuration))
+	for model, enabled := range billingSetting.InputVideoDuration {
+		copied[model] = enabled
+	}
+	return copied
 }
 
 // NormalizeResolutionKey normalizes a resolution value into a stable key.
@@ -235,7 +256,7 @@ func GetResolutionPriceCopy() map[string]map[string]float64 {
 }
 
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 3)
+	extra := make(map[string]any, 5)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
@@ -247,6 +268,9 @@ func GetPricingSyncData(base map[string]any) map[string]any {
 	}
 	if prices := GetResolutionPriceCopy(); len(prices) > 0 {
 		extra[ResolutionPriceField] = prices
+	}
+	if flags := GetInputVideoDurationCopy(); len(flags) > 0 {
+		extra[InputVideoDurationField] = flags
 	}
 	return lo.Assign(base, extra)
 }

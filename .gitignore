@@ -46,3 +46,10 @@ skills-lock.json
 
 # 各环境的 compose 副本（含明文数据库密码）
 /docker-compose.yml.*
+/.docker-compose.*
+
+# 本地临时诊断脚本与敏感导出（服务器地址、密码、退款明细）
+/.tmp-*
+/.probe-*
+/HANDOFF-WORKBENCH.md
+/refund_*.csv

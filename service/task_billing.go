@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -22,8 +23,13 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if operation_setting.IsTaskPerCallBillingModel(info.OriginModelName) {
 		logContent = fmt.Sprintf("%s，按次计费", logContent)
 	} else {
-		if info.PriceData.UsePrice {
+		if billing_setting.IsPerSecondPriced(info.OriginModelName) {
 			logContent = fmt.Sprintf("%s，按秒计费", logContent)
+		} else if info.PriceData.UsePrice {
+			logContent = fmt.Sprintf("%s，按次计费", logContent)
+		}
+		if billing_setting.IsInputVideoDurationBilling(info.OriginModelName) {
+			logContent = fmt.Sprintf("%s（输入视频时长）", logContent)
 		}
 		if len(info.PriceData.OtherRatios) > 0 {
 			var contents []string

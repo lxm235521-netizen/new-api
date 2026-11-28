@@ -18,6 +18,7 @@ import (
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
@@ -91,6 +92,12 @@ func validateRemixRequest(c *gin.Context) *dto.TaskError {
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
+	}
+	// Video-processing models (subtitle removal, super resolution, ...) bill by
+	// the input video and do not need a prompt. Only relax the requirement when
+	// the model explicitly enables input-video-duration billing.
+	if billing_setting.IsInputVideoDurationBilling(info.OriginModelName) {
+		return relaycommon.ValidateMultipartDirectAllowEmptyPrompt(c, info)
 	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
